@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
       
       let rawResponse: any
       try {
-        rawResponse = await client.youtube.user(query, { history })
+        rawResponse = await client.youtube.user(query, history)
       } catch (historyError) {
         console.log("Failed with history parameter, trying without:", historyError)
         // Fallback to basic call without history parameter
