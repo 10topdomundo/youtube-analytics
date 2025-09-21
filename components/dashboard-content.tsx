@@ -6,7 +6,6 @@ import { ChannelInsights } from "@/components/channel-insights"
 import { DataVisualizations } from "@/components/data-visualizations"
 import { ChannelDataTable } from "@/components/channel-data-table"
 import { FolderManagement } from "@/components/folder-management"
-import { AdvancedChannelTable } from "@/components/advanced-channel-table"
 import { AgeAnalyticsDashboard } from "@/components/age-analytics-dashboard"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { BarChart3, TrendingUp, Users, Table, Folder, PieChart } from "lucide-react"
@@ -79,19 +78,8 @@ export function DashboardContent({ user, profile }: DashboardContentProps) {
           </TabsContent>
 
           <TabsContent value="table">
-            <AdvancedChannelTable 
+            <ChannelDataTable 
               isAdmin={profile?.role === "admin" || false}
-              onChannelSelect={(channelId) => {
-                // Navigate to channel insights or open modal
-                console.log("Selected channel:", channelId)
-              }}
-              onChannelDelete={async (channelIds) => {
-                // Delete channels
-                const promises = channelIds.map(id => 
-                  fetch(`/api/channels/${id}`, { method: "DELETE" })
-                )
-                await Promise.all(promises)
-              }}
             />
           </TabsContent>
 

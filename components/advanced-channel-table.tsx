@@ -377,14 +377,14 @@ export function AdvancedChannelTable({
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               <div>
                 <Label>Niche</Label>
-                <Select value={filters.niche || ""} onValueChange={(value) => 
-                  setFilters(prev => ({ ...prev, niche: value || undefined }))
+                <Select value={filters.niche || "__all__"} onValueChange={(value) => 
+                  setFilters(prev => ({ ...prev, niche: value === "__all__" ? undefined : value }))
                 }>
                   <SelectTrigger>
                     <SelectValue placeholder="All niches" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All niches</SelectItem>
+                    <SelectItem value="__all__">All niches</SelectItem>
                     {niches.map(niche => (
                       <SelectItem key={niche} value={niche}>{niche}</SelectItem>
                     ))}
@@ -394,14 +394,14 @@ export function AdvancedChannelTable({
 
               <div>
                 <Label>Age Classification</Label>
-                <Select value={filters.ageClassification || ""} onValueChange={(value) => 
-                  setFilters(prev => ({ ...prev, ageClassification: value || undefined }))
+                <Select value={filters.ageClassification || "__all__"} onValueChange={(value) => 
+                  setFilters(prev => ({ ...prev, ageClassification: value === "__all__" ? undefined : value }))
                 }>
                   <SelectTrigger>
                     <SelectValue placeholder="All ages" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All ages</SelectItem>
+                    <SelectItem value="__all__">All ages</SelectItem>
                     <SelectItem value="fresh">Fresh (2020+)</SelectItem>
                     <SelectItem value="aged">Aged (2006-2019)</SelectItem>
                     <SelectItem value="vintage">Vintage (Pre-2006)</SelectItem>
@@ -412,14 +412,14 @@ export function AdvancedChannelTable({
 
               <div>
                 <Label>Country</Label>
-                <Select value={filters.country || ""} onValueChange={(value) => 
-                  setFilters(prev => ({ ...prev, country: value || undefined }))
+                <Select value={filters.country || "__all__"} onValueChange={(value) => 
+                  setFilters(prev => ({ ...prev, country: value === "__all__" ? undefined : value }))
                 }>
                   <SelectTrigger>
                     <SelectValue placeholder="All countries" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All countries</SelectItem>
+                    <SelectItem value="__all__">All countries</SelectItem>
                     {countries.map(country => (
                       <SelectItem key={country} value={country}>{country}</SelectItem>
                     ))}
@@ -429,14 +429,14 @@ export function AdvancedChannelTable({
 
               <div>
                 <Label>Language</Label>
-                <Select value={filters.language || ""} onValueChange={(value) => 
-                  setFilters(prev => ({ ...prev, language: value || undefined }))
+                <Select value={filters.language || "__all__"} onValueChange={(value) => 
+                  setFilters(prev => ({ ...prev, language: value === "__all__" ? undefined : value }))
                 }>
                   <SelectTrigger>
                     <SelectValue placeholder="All languages" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">All languages</SelectItem>
+                    <SelectItem value="__all__">All languages</SelectItem>
                     {languages.map(language => (
                       <SelectItem key={language} value={language}>{language}</SelectItem>
                     ))}

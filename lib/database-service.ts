@@ -68,42 +68,28 @@ class DatabaseService {
       }
     }
 
-    const today = new Date()
-    const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
-    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000)
-    const threeDaysAgo = new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000)
-    const sixtyDaysAgo = new Date(today.getTime() - 60 * 24 * 60 * 60 * 1000)
+    // Sort daily stats by date to ensure proper calculation
+    const sortedStats = dailyStats.sort((a, b) => new Date(a.stat_date).getTime() - new Date(b.stat_date).getTime())
+    
+    // Get latest and previous data points for delta calculations
+    const latestStats = sortedStats[sortedStats.length - 1]
+    const stats30DaysAgo = sortedStats[Math.max(0, sortedStats.length - 30)]
+    const stats7DaysAgo = sortedStats[Math.max(0, sortedStats.length - 7)]
+    const stats3DaysAgo = sortedStats[Math.max(0, sortedStats.length - 3)]
 
-    // Get stats for different periods
-    const stats30Days = dailyStats.filter((stat) => new Date(stat.stat_date) >= thirtyDaysAgo)
-    const stats7Days = dailyStats.filter((stat) => new Date(stat.stat_date) >= sevenDaysAgo)
-    const stats3Days = dailyStats.filter((stat) => new Date(stat.stat_date) >= threeDaysAgo)
-    const stats60Days = dailyStats.filter((stat) => new Date(stat.stat_date) >= sixtyDaysAgo)
+    // Calculate views for the last periods (difference from previous point)
+    const views30Days = latestStats && stats30DaysAgo ? latestStats.views - stats30DaysAgo.views : 0
+    const views7Days = latestStats && stats7DaysAgo ? latestStats.views - stats7DaysAgo.views : 0
+    const views3Days = latestStats && stats3DaysAgo ? latestStats.views - stats3DaysAgo.views : 0
 
-    // Calculate views for periods
-    const views30Days = stats30Days.reduce((sum, stat) => sum + stat.views, 0)
-    const views7Days = stats7Days.reduce((sum, stat) => sum + stat.views, 0)
-    const views3Days = stats3Days.reduce((sum, stat) => sum + stat.views, 0)
+    // Calculate delta percentages (comparing current period to previous period of same length)
+    const stats60DaysAgo = sortedStats[Math.max(0, sortedStats.length - 60)]
+    const stats14DaysAgo = sortedStats[Math.max(0, sortedStats.length - 14)]
+    const stats6DaysAgo = sortedStats[Math.max(0, sortedStats.length - 6)]
 
-    // Calculate previous period views for deltas
-    const prevStats30Days = stats60Days.filter(
-      (stat) => new Date(stat.stat_date) < thirtyDaysAgo && new Date(stat.stat_date) >= sixtyDaysAgo,
-    )
-    const prevViews30Days = prevStats30Days.reduce((sum, stat) => sum + stat.views, 0)
-
-    const prevStats7Days = stats30Days.filter(
-      (stat) =>
-        new Date(stat.stat_date) < sevenDaysAgo &&
-        new Date(stat.stat_date) >= new Date(sevenDaysAgo.getTime() - 7 * 24 * 60 * 60 * 1000),
-    )
-    const prevViews7Days = prevStats7Days.reduce((sum, stat) => sum + stat.views, 0)
-
-    const prevStats3Days = stats7Days.filter(
-      (stat) =>
-        new Date(stat.stat_date) < threeDaysAgo &&
-        new Date(stat.stat_date) >= new Date(threeDaysAgo.getTime() - 3 * 24 * 60 * 60 * 1000),
-    )
-    const prevViews3Days = prevStats3Days.reduce((sum, stat) => sum + stat.views, 0)
+    const prevViews30Days = stats30DaysAgo && stats60DaysAgo ? stats30DaysAgo.views - stats60DaysAgo.views : 0
+    const prevViews7Days = stats7DaysAgo && stats14DaysAgo ? stats7DaysAgo.views - stats14DaysAgo.views : 0
+    const prevViews3Days = stats3DaysAgo && stats6DaysAgo ? stats3DaysAgo.views - stats6DaysAgo.views : 0
 
     // Calculate deltas
     const delta30Days = prevViews30Days > 0 ? ((views30Days - prevViews30Days) / prevViews30Days) * 100 : 0

@@ -15,13 +15,14 @@ import { ChartBuilder } from "./chart-builder"
 
 interface ChannelTableData {
   id: string
+  channel_id: string
   channel_name: string
-  channel_niche: string
-  channel_language: string
-  views_last_30d: number
-  views_delta_30d: number
-  views_delta_7d: number
-  views_delta_3d: number
+  niche: string
+  language: string
+  views_last_30_days: number
+  views_delta_30_days: string
+  views_delta_7_days: string
+  views_delta_3_days: string
   views_per_subscriber: number
   uploads_last_30d: number
   videos_until_takeoff: number
@@ -35,7 +36,6 @@ interface ChannelTableData {
   video_length: string
   status: string
   notes: string
-  channel_id: string
   [key: string]: any // Allow dynamic columns
 }
 
@@ -47,13 +47,12 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
   const [data, setData] = useState<ChannelTableData[]>([])
   const [filteredData, setFilteredData] = useState<ChannelTableData[]>([])
   const [columns, setColumns] = useState<string[]>([
-    "channel_name",
-    "channel_niche",
-    "channel_language",
-    "views_last_30d",
-    "views_delta_30d",
-    "views_delta_7d",
-    "views_delta_3d",
+    "niche",
+    "language", 
+    "views_last_30_days",
+    "views_delta_30_days",
+    "views_delta_7_days",
+    "views_delta_3_days",
     "views_per_subscriber",
     "uploads_last_30d",
     "videos_until_takeoff",
@@ -63,9 +62,10 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
     "channel_type",
     "channel_creation",
     "thumbnail_style",
-    "video_style",
+    "video_style", 
     "video_length",
     "status",
+    "channel_name",
     "notes",
     "channel_id",
   ])
@@ -172,14 +172,59 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
   }
 
   const formatColumnName = (name: string) => {
-    return name.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
+    // Custom column name mappings to match the exact headers requested
+    const customNames: Record<string, string> = {
+      "niche": "Niche",
+      "language": "Language", 
+      "views_last_30_days": "Views last 30 days",
+      "views_delta_30_days": "Views Δ% 30 days",
+      "views_delta_7_days": "Views Δ% 7 days",
+      "views_delta_3_days": "Views Δ% 3 days",
+      "views_per_subscriber": "Views per subscriber",
+      "uploads_last_30d": "Uploads (Last 30d)",
+      "videos_until_takeoff": "Videos until takeoff",
+      "days_until_takeoff": "Days Until Takeoff",
+      "days_creation_to_first_upload": "Days Creation → First Upload",
+      "sub_niche": "Sub-niche",
+      "channel_type": "Channel type",
+      "channel_creation": "Channel creation",
+      "thumbnail_style": "Thumbnail style",
+      "video_style": "Video style",
+      "video_length": "Video length",
+      "status": "Status",
+      "channel_name": "Channel Name",
+      "notes": "Notes",
+      "channel_id": "Channel ID",
+    }
+    
+    return customNames[name] || name.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())
   }
 
   const renderCell = (row: ChannelTableData, column: string, rowIndex: number) => {
     const value = row[column]
     const isEditing = editingCell?.row === rowIndex && editingCell?.col === column
+    
+    // Define read-only calculated fields
+    const readOnlyFields = new Set([
+      "views_last_30_days",
+      "views_delta_30_days", 
+      "views_delta_7_days",
+      "views_delta_3_days",
+      "views_per_subscriber",
+      "uploads_last_30d",
+      "videos_until_takeoff",
+      "days_until_takeoff", 
+      "days_creation_to_first_upload",
+      "channel_creation",
+      "channel_id",
+      "total_subscribers",
+      "total_views",
+      "total_uploads"
+    ])
+    
+    const isReadOnly = readOnlyFields.has(column)
 
-    if (isEditing && isAdmin) {
+    if (isEditing && isAdmin && !isReadOnly) {
       return (
         <Input
           value={value || ""}
@@ -196,12 +241,59 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
       )
     }
 
-    if (column.includes("views") && typeof value === "number") {
+    // Format numeric values (views)
+    if (column === "views_last_30_days" && typeof value === "number") {
+      const formatViews = (num: number) => {
+        if (num === 0) return ""
+        if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
+        if (num >= 1000) return `${Math.round(num / 1000)}K`
+        return num.toString()
+      }
+      
       return (
-        <span
-          className={isAdmin ? "cursor-pointer hover:bg-muted p-1 rounded" : "p-1"}
-          onClick={isAdmin ? () => setEditingCell({ row: rowIndex, col: column }) : undefined}
-        >
+        <span className="p-1 font-mono text-xs">
+          {formatViews(value)}
+        </span>
+      )
+    }
+
+    // Format percentage values
+    if (column.includes("delta") && typeof value === "string") {
+      // Don't show 0% values, just empty
+      if (value === "0%" || value === "0.0%") {
+        return <span className="p-1 font-mono text-xs text-muted-foreground">—</span>
+      }
+      
+      const numValue = parseFloat(value.replace('%', ''))
+      const colorClass = numValue > 0 ? "text-green-600" : numValue < 0 ? "text-red-600" : "text-gray-600"
+      return (
+        <span className={`p-1 font-mono text-xs ${colorClass}`}>
+          {value}
+        </span>
+      )
+    }
+
+    // Format views per subscriber
+    if (column === "views_per_subscriber" && typeof value === "number") {
+      if (value === 0) {
+        return <span className="p-1 font-mono text-xs text-muted-foreground">—</span>
+      }
+      return (
+        <span className="p-1 font-mono text-xs">
+          {value.toFixed(2)}
+        </span>
+      )
+    }
+    
+    // Format other numeric fields that should be empty when zero
+    if ((column === "uploads_last_30d" || column === "videos_until_takeoff" || 
+         column === "days_until_takeoff" || column === "days_creation_to_first_upload") && 
+        typeof value === "number") {
+      if (value === 0) {
+        return <span className="p-1 font-mono text-xs text-muted-foreground">—</span>
+      }
+      return (
+        <span className="p-1 font-mono text-xs">
           {value.toLocaleString()}
         </span>
       )
@@ -211,8 +303,8 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
       return (
         <Badge
           variant={value === "Active" ? "default" : "secondary"}
-          className={isAdmin ? "cursor-pointer" : ""}
-          onClick={isAdmin ? () => setEditingCell({ row: rowIndex, col: column }) : undefined}
+          className={isAdmin && !isReadOnly ? "cursor-pointer" : ""}
+          onClick={isAdmin && !isReadOnly ? () => setEditingCell({ row: rowIndex, col: column }) : undefined}
         >
           {value || "Unknown"}
         </Badge>
@@ -221,8 +313,9 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
 
     return (
       <span
-        className={isAdmin ? "cursor-pointer hover:bg-muted p-1 rounded block min-h-[20px]" : "p-1 block min-h-[20px]"}
-        onClick={isAdmin ? () => setEditingCell({ row: rowIndex, col: column }) : undefined}
+        className={`${isAdmin && !isReadOnly ? "cursor-pointer hover:bg-muted" : ""} p-1 rounded block min-h-[20px] text-xs ${isReadOnly ? "text-muted-foreground bg-muted/30" : ""}`}
+        onClick={isAdmin && !isReadOnly ? () => setEditingCell({ row: rowIndex, col: column }) : undefined}
+        title={isReadOnly ? "This field is calculated automatically" : undefined}
       >
         {value || ""}
       </span>
