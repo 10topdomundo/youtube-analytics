@@ -55,15 +55,22 @@ export function UserManagement() {
 
   const fetchUsers = async () => {
     try {
+      console.log("=== Fetching users from admin API ===")
       const response = await fetch("/api/admin/users")
       const data = await response.json()
+      
+      console.log("Response status:", response.status)
+      console.log("Response data:", data)
 
       if (!response.ok) {
+        console.error("API error:", data.error)
         throw new Error(data.error || "Failed to fetch users")
       }
 
-      setUsers(data.users)
+      console.log("Users received:", data.users?.length || 0)
+      setUsers(data.users || [])
     } catch (err) {
+      console.error("Fetch users error:", err)
       setError(err instanceof Error ? err.message : "An error occurred")
     } finally {
       setLoading(false)
@@ -321,7 +328,7 @@ export function UserManagement() {
             </TableHeader>
             <TableBody>
               {users.map((user) => (
-                <TableRow key={user.id}>
+                <TableRow key={user.user_id}>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       {user.is_admin ? (

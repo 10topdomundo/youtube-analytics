@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Save, Download } from "lucide-react"
+import { Plus, Save, Download, BarChart3 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,6 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { ChartBuilder } from "./chart-builder"
 
 interface ChannelTableData {
   id: string
@@ -328,40 +330,56 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            Channel Data ({filteredData.length} channels)
-            {showTakeoffFilter && (
-              <Badge variant="secondary" className="ml-2">
-                Takeoff Filter Active
-              </Badge>
-            )}
-          </CardTitle>
+          <CardTitle>Channel Data Analysis</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  {columns.map((column) => (
-                    <TableHead key={column} className="min-w-[120px] text-xs">
-                      {formatColumnName(column)}
-                    </TableHead>
-                  ))}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredData.map((row, rowIndex) => (
-                  <TableRow key={row.id || rowIndex}>
-                    {columns.map((column) => (
-                      <TableCell key={column} className="text-xs p-2">
-                        {renderCell(row, column, rowIndex)}
-                      </TableCell>
+          <Tabs defaultValue="table" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="table">
+                Data Table ({filteredData.length} channels)
+                {showTakeoffFilter && (
+                  <Badge variant="secondary" className="ml-2">
+                    Filtered
+                  </Badge>
+                )}
+              </TabsTrigger>
+              <TabsTrigger value="charts">
+                <BarChart3 className="w-4 h-4 mr-2" />
+                Chart Builder
+              </TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="table" className="mt-4">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      {columns.map((column) => (
+                        <TableHead key={column} className="min-w-[120px] text-xs">
+                          {formatColumnName(column)}
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredData.map((row, rowIndex) => (
+                      <TableRow key={row.id || rowIndex}>
+                        {columns.map((column) => (
+                          <TableCell key={column} className="text-xs p-2">
+                            {renderCell(row, column, rowIndex)}
+                          </TableCell>
+                        ))}
+                      </TableRow>
                     ))}
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                  </TableBody>
+                </Table>
+              </div>
+            </TabsContent>
+            
+            <TabsContent value="charts" className="mt-4">
+              <ChartBuilder data={filteredData} columns={columns} />
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
     </div>

@@ -4,10 +4,12 @@ import { AnalyticsDashboard } from "@/components/analytics-dashboard"
 import { ChannelManagement } from "@/components/channel-management"
 import { ChannelInsights } from "@/components/channel-insights"
 import { DataVisualizations } from "@/components/data-visualizations"
-import { SocialBladeIntegration } from "@/components/socialblade-integration"
 import { ChannelDataTable } from "@/components/channel-data-table"
+import { FolderManagement } from "@/components/folder-management"
+import { AdvancedChannelTable } from "@/components/advanced-channel-table"
+import { AgeAnalyticsDashboard } from "@/components/age-analytics-dashboard"
 import { DashboardHeader } from "@/components/dashboard-header"
-import { BarChart3, TrendingUp, Users, Database, Table } from "lucide-react"
+import { BarChart3, TrendingUp, Users, Table, Folder, PieChart } from "lucide-react"
 import type { User } from "@supabase/supabase-js"
 import type { UserProfile } from "@/lib/auth"
 
@@ -32,30 +34,34 @@ export function DashboardContent({ user, profile }: DashboardContentProps) {
 
         {/* Main Navigation */}
         <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />
-              Dashboard
+              <span className="hidden sm:inline">Dashboard</span>
+            </TabsTrigger>
+            <TabsTrigger value="folders" className="flex items-center gap-2">
+              <Folder className="w-4 h-4" />
+              <span className="hidden sm:inline">Folders</span>
             </TabsTrigger>
             <TabsTrigger value="channels" className="flex items-center gap-2">
               <Users className="w-4 h-4" />
-              Channels
-            </TabsTrigger>
-            <TabsTrigger value="insights" className="flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" />
-              Insights
-            </TabsTrigger>
-            <TabsTrigger value="visualizations" className="flex items-center gap-2">
-              <BarChart3 className="w-4 h-4" />
-              Charts
+              <span className="hidden sm:inline">Channels</span>
             </TabsTrigger>
             <TabsTrigger value="table" className="flex items-center gap-2">
               <Table className="w-4 h-4" />
-              Data Table
+              <span className="hidden sm:inline">Table</span>
             </TabsTrigger>
-            <TabsTrigger value="integration" className="flex items-center gap-2">
-              <Database className="w-4 h-4" />
-              Integration
+            <TabsTrigger value="age-analytics" className="flex items-center gap-2">
+              <PieChart className="w-4 h-4" />
+              <span className="hidden sm:inline">Age Analytics</span>
+            </TabsTrigger>
+            <TabsTrigger value="insights" className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4" />
+              <span className="hidden sm:inline">Insights</span>
+            </TabsTrigger>
+            <TabsTrigger value="visualizations" className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              <span className="hidden sm:inline">Charts</span>
             </TabsTrigger>
           </TabsList>
 
@@ -63,8 +69,34 @@ export function DashboardContent({ user, profile }: DashboardContentProps) {
             <AnalyticsDashboard />
           </TabsContent>
 
+
+          <TabsContent value="folders">
+            <FolderManagement isAdmin={profile?.role === "admin" || false} />
+          </TabsContent>
+
           <TabsContent value="channels">
-            <ChannelManagement isAdmin={profile?.is_admin || false} />
+            <ChannelManagement isAdmin={profile?.role === "admin" || false} />
+          </TabsContent>
+
+          <TabsContent value="table">
+            <AdvancedChannelTable 
+              isAdmin={profile?.role === "admin" || false}
+              onChannelSelect={(channelId) => {
+                // Navigate to channel insights or open modal
+                console.log("Selected channel:", channelId)
+              }}
+              onChannelDelete={async (channelIds) => {
+                // Delete channels
+                const promises = channelIds.map(id => 
+                  fetch(`/api/channels/${id}`, { method: "DELETE" })
+                )
+                await Promise.all(promises)
+              }}
+            />
+          </TabsContent>
+
+          <TabsContent value="age-analytics">
+            <AgeAnalyticsDashboard />
           </TabsContent>
 
           <TabsContent value="insights">
@@ -73,14 +105,6 @@ export function DashboardContent({ user, profile }: DashboardContentProps) {
 
           <TabsContent value="visualizations">
             <DataVisualizations />
-          </TabsContent>
-
-          <TabsContent value="table">
-            <ChannelDataTable isAdmin={profile?.is_admin || false} />
-          </TabsContent>
-
-          <TabsContent value="integration">
-            <SocialBladeIntegration />
           </TabsContent>
         </Tabs>
       </div>

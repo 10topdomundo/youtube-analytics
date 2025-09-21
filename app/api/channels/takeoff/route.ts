@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { databaseService } from "@/lib/database-service"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
     const takenOffChannels = await databaseService.getChannelsWithTakeoff()

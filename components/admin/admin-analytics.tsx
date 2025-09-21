@@ -25,19 +25,32 @@ export function AdminAnalytics() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Mock data for now - replace with actual API calls
-    setTimeout(() => {
-      setStats({
-        totalUsers: 24,
-        adminUsers: 3,
-        totalChannels: 156,
-        activeChannels: 142,
-        recentSignups: 5,
-        systemHealth: "healthy",
-      })
-      setLoading(false)
-    }, 1000)
+    loadAnalyticsData()
   }, [])
+
+  const loadAnalyticsData = async () => {
+    try {
+      const response = await fetch("/api/admin/analytics")
+      if (!response.ok) {
+        throw new Error("Failed to fetch analytics data")
+      }
+      const data = await response.json()
+      setStats(data)
+    } catch (error) {
+      console.error("Failed to load analytics data:", error)
+      // Set fallback data on error
+      setStats({
+        totalUsers: 0,
+        adminUsers: 0,
+        totalChannels: 0,
+        activeChannels: 0,
+        recentSignups: 0,
+        systemHealth: "error",
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (loading) {
     return <div className="flex justify-center p-8">Loading analytics...</div>

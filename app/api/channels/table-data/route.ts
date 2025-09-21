@@ -1,15 +1,33 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { databaseService } from "@/lib/database-service"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   try {
+    console.log("=== Table Data API Debug ===")
     const channels = await databaseService.getAllChannelsWithMetrics()
+    console.log("Channels fetched:", channels.length)
+    
+    if (channels.length > 0) {
+      console.log("Sample channel:", {
+        id: channels[0].id,
+        channel_id: channels[0].channel_id,
+        channel_name: channels[0].channel_name,
+        statistics: channels[0].statistics,
+        calculated: channels[0].calculated
+      })
+    }
 
     const tableData = channels.map((channel) => ({
       id: channel.id,
       channel_name: channel.channel_name,
       channel_niche: channel.channel_niche || "",
       channel_language: channel.channel_language || "",
+      // Add total statistics for channel management display
+      total_subscribers: channel.statistics?.total_subscribers || 0,
+      total_views: channel.statistics?.total_views || 0,
+      total_uploads: channel.statistics?.total_uploads || 0,
       views_last_30d: channel.calculated.views_last_30_days,
       views_delta_30d: channel.calculated.views_delta_30_days,
       views_delta_7d: channel.calculated.views_delta_7_days,
@@ -31,6 +49,14 @@ export async function GET() {
       // Include custom fields if they exist
       ...(channel.custom_fields || {}),
     }))
+
+    console.log("Table data sample:", tableData.length > 0 ? {
+      id: tableData[0].id,
+      channel_name: tableData[0].channel_name,
+      total_subscribers: tableData[0].total_subscribers,
+      total_views: tableData[0].total_views
+    } : "No data")
+    console.log("=== End Table Data API Debug ===")
 
     return NextResponse.json(tableData)
   } catch (error) {

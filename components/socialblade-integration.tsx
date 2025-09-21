@@ -5,24 +5,19 @@ import { RefreshCw, Activity, AlertCircle, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { getSocialBladeClient } from "@/lib/socialblade-client"
+// Removed getSocialBladeClient import - using API endpoint instead
 
 interface ApiStatus {
   status: string
-  credits_remaining: number
-  rate_limit: {
-    requests_per_hour: number
-    requests_remaining: number
-  }
+  error?: string
+  message?: string
 }
 
 export function SocialBladeIntegration() {
   const [apiStatus, setApiStatus] = useState<ApiStatus | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [lastSync, setLastSync] = useState<Date | null>(null)
-  const [syncProgress, setSyncProgress] = useState(0)
 
   useEffect(() => {
     loadApiStatus()
@@ -32,25 +27,28 @@ export function SocialBladeIntegration() {
 
   const loadApiStatus = async () => {
     try {
-      const client = getSocialBladeClient()
-      const status = await client.getApiStatus()
+      const response = await fetch('/api/socialblade/status')
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+      const status = await response.json()
       setApiStatus(status)
     } catch (error) {
       console.error("Failed to load API status:", error)
+      // Set fallback status on error
+      setApiStatus({
+        status: "error",
+        error: "Failed to load API status"
+      })
     }
   }
 
   const handleSync = async () => {
     setIsLoading(true)
-    setSyncProgress(0)
 
     try {
-      // Simulate sync progress
-      const intervals = [20, 40, 60, 80, 100]
-      for (const progress of intervals) {
-        await new Promise((resolve) => setTimeout(resolve, 500))
-        setSyncProgress(progress)
-      }
+      // Simulate sync process
+      await new Promise((resolve) => setTimeout(resolve, 2000))
 
       setLastSync(new Date())
       await loadApiStatus()
@@ -58,7 +56,6 @@ export function SocialBladeIntegration() {
       console.error("Sync failed:", error)
     } finally {
       setIsLoading(false)
-      setSyncProgress(0)
     }
   }
 
@@ -106,32 +103,39 @@ export function SocialBladeIntegration() {
             <>
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium">Connection Status</span>
-                <Badge variant={apiStatus.status === "active" ? "default" : "destructive"} className="bg-primary">
-                  <CheckCircle className="w-3 h-3 mr-1" />
-                  {apiStatus.status === "active" ? "Connected" : "Disconnected"}
+                <Badge 
+                  variant={apiStatus.status === "configured" ? "default" : "destructive"} 
+                  className={apiStatus.status === "configured" ? "bg-green-600" : "bg-red-600"}
+                >
+                  {apiStatus.status === "configured" ? (
+                    <CheckCircle className="w-3 h-3 mr-1" />
+                  ) : (
+                    <AlertCircle className="w-3 h-3 mr-1" />
+                  )}
+                  {apiStatus.status === "configured" ? "Configured" : 
+                   apiStatus.status === "not_configured" ? "Not Configured" : 
+                   "Error"}
                 </Badge>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span>API Credits Remaining</span>
-                  <span className="font-medium">{apiStatus.credits_remaining.toLocaleString()}</span>
-                </div>
-                <Progress value={(apiStatus.credits_remaining / 10000) * 100} className="h-2" />
-              </div>
 
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-sm">
-                  <span>Rate Limit (Requests/Hour)</span>
-                  <span className="font-medium">
-                    {apiStatus.rate_limit.requests_remaining} / {apiStatus.rate_limit.requests_per_hour}
-                  </span>
-                </div>
-                <Progress
-                  value={(apiStatus.rate_limit.requests_remaining / apiStatus.rate_limit.requests_per_hour) * 100}
-                  className="h-2"
-                />
-              </div>
+              {apiStatus.status === "not_configured" && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    SocialBlade API credentials are not configured. Please add SOCIALBLADE_CLIENT_ID and SOCIALBLADE_CLIENT_SECRET to your environment variables.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {apiStatus.status === "configured" && (
+                <Alert>
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    SocialBlade credentials are configured and ready to use.
+                  </AlertDescription>
+                </Alert>
+              )}
             </>
           ) : (
             <div className="text-center py-4">
@@ -152,9 +156,8 @@ export function SocialBladeIntegration() {
             <div className="space-y-2">
               <div className="flex items-center justify-between text-sm">
                 <span>Syncing channel data...</span>
-                <span className="font-medium">{syncProgress}%</span>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
               </div>
-              <Progress value={syncProgress} className="h-2" />
             </div>
           )}
 

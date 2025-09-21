@@ -100,6 +100,8 @@ export function getSocialBladeClient(): SocialBladeClient {
     // In production, these would come from environment variables
     const clientId = process.env.SOCIALBLADE_CLIENT_ID || ""
     const clientSecret = process.env.SOCIALBLADE_CLIENT_SECRET || ""
+    console.log("clientId", clientId)
+    console.log("clientSecret", clientSecret)
 
     if (!clientId || !clientSecret) {
       throw new Error("SocialBlade credentials not configured")

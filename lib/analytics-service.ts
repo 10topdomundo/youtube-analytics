@@ -36,37 +36,45 @@ export class AnalyticsService {
     if (!insights) return null
 
     const dailyStats = insights.dailyStats
-    const totalViews = dailyStats.reduce((sum, stat) => sum + stat.views, 0)
-    const totalSubscribers = dailyStats.reduce((sum, stat) => sum + stat.subscribers, 0)
+    
+    // If we don't have enough daily stats, use growth data from insights
+    let avgDailyViews = 0
+    let avgDailySubsGained = 0
+    
+    if (dailyStats.length >= 2) {
+      // Calculate daily changes from daily stats
+      const dailyViewChanges = []
+      const dailySubChanges = []
 
-    // Calculate daily changes
-    const dailyViewChanges = []
-    const dailySubChanges = []
+      for (let i = 1; i < dailyStats.length; i++) {
+        dailyViewChanges.push(dailyStats[i].views - dailyStats[i - 1].views)
+        dailySubChanges.push(dailyStats[i].subscribers - dailyStats[i - 1].subscribers)
+      }
 
-    for (let i = 1; i < dailyStats.length; i++) {
-      dailyViewChanges.push(dailyStats[i].views - dailyStats[i - 1].views)
-      dailySubChanges.push(dailyStats[i].subscribers - dailyStats[i - 1].subscribers)
+      avgDailyViews = dailyViewChanges.length > 0 ? dailyViewChanges.reduce((a, b) => a + b, 0) / dailyViewChanges.length : 0
+      avgDailySubsGained = dailySubChanges.length > 0 ? dailySubChanges.reduce((a, b) => a + b, 0) / dailySubChanges.length : 0
+    } else {
+      // Fallback to growth data if daily stats are insufficient
+      avgDailyViews = insights.growth.viewsChange / period
+      avgDailySubsGained = insights.growth.subscribersChange / period
     }
 
-    const avgDailyViews =
-      dailyViewChanges.length > 0 ? dailyViewChanges.reduce((a, b) => a + b, 0) / dailyViewChanges.length : 0
-    const avgDailySubsGained =
-      dailySubChanges.length > 0 ? dailySubChanges.reduce((a, b) => a + b, 0) / dailySubChanges.length : 0
+    // Calculate views per subscriber using current statistics
+    const viewsPerSubscriber = insights.statistics.total_subscribers > 0 
+      ? insights.statistics.total_views / insights.statistics.total_subscribers 
+      : 0
 
     return {
-      averageDailyViews: Math.max(0, avgDailyViews),
-      averageDailySubsGained: Math.max(0, avgDailySubsGained),
-      totalUploadsInPeriod: insights.statistics.total_uploads,
-      viewsPerUpload:
-        insights.statistics.total_uploads > 0 ? insights.statistics.total_views / insights.statistics.total_uploads : 0,
-      subsPerUpload:
-        insights.statistics.total_uploads > 0
-          ? insights.statistics.total_subscribers / insights.statistics.total_uploads
-          : 0,
-      engagementRate: this.calculateViewsPerSubscriber(
-        insights.statistics.total_views,
-        insights.statistics.total_subscribers,
-      ),
+      averageDailyViews: Math.max(0, Math.round(avgDailyViews)),
+      averageDailySubsGained: Math.max(0, Math.round(avgDailySubsGained)),
+      totalUploadsInPeriod: insights.statistics.total_uploads || 0,
+      viewsPerUpload: insights.statistics.total_uploads > 0 
+        ? Math.round(insights.statistics.total_views / insights.statistics.total_uploads) 
+        : 0,
+      subsPerUpload: insights.statistics.total_uploads > 0
+        ? Math.round(insights.statistics.total_subscribers / insights.statistics.total_uploads)
+        : 0,
+      engagementRate: Math.round(viewsPerSubscriber * 100) / 100, // Round to 2 decimal places
     }
   }
 

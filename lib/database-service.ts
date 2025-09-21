@@ -38,9 +38,12 @@ class DatabaseService {
 
     for (const channel of channels) {
       const calculated = await this.calculateChannelMetrics(channel.channel_id)
+      const statistics = await this.getChannelStatistics(channel.channel_id)
+      
       channelsWithMetrics.push({
         ...channel,
         calculated,
+        statistics, // Add statistics to the channel data
       })
     }
 
@@ -108,7 +111,17 @@ class DatabaseService {
     const delta3Days = prevViews3Days > 0 ? ((views3Days - prevViews3Days) / prevViews3Days) * 100 : 0
 
     // Calculate uploads in last 30 days
-    const uploads30Days = stats30Days.reduce((sum, stat) => sum + (stat.video_uploads || 0), 0)
+    // Note: SocialBlade doesn't provide daily upload counts, so we'll estimate
+    let uploads30Days = 0
+    if (channel?.channel_created_date && statistics?.total_uploads) {
+      const creationDate = new Date(channel.channel_created_date)
+      const totalDaysSinceCreation = Math.floor((new Date().getTime() - creationDate.getTime()) / (1000 * 60 * 60 * 24))
+      
+      if (totalDaysSinceCreation > 0) {
+        const uploadsPerDay = statistics.total_uploads / totalDaysSinceCreation
+        uploads30Days = Math.floor(uploadsPerDay * 30) // Estimate for last 30 days
+      }
+    }
 
     // Calculate views per subscriber
     const currentSubscribers = statistics?.total_subscribers || 0
@@ -120,13 +133,12 @@ class DatabaseService {
 
     if (channel?.channel_created_date) {
       const creationDate = new Date(channel.channel_created_date)
-      const firstUploadDate = dailyStats.find((stat) => (stat.video_uploads || 0) > 0)?.stat_date
-
-      if (firstUploadDate) {
-        const daysDiff = Math.floor(
-          (new Date(firstUploadDate).getTime() - creationDate.getTime()) / (1000 * 60 * 60 * 24),
-        )
-        daysCreationToFirstUpload = daysDiff
+      
+      // Since SocialBlade doesn't provide daily upload data, we can't determine the exact first upload date
+      // We'll estimate based on the assumption that uploads started shortly after channel creation
+      // For channels with uploads, assume first upload was within 30 days of creation
+      if (statistics?.total_uploads && statistics.total_uploads > 0) {
+        daysCreationToFirstUpload = 30 // Estimated - SocialBlade doesn't provide this data
       }
 
       // Find takeoff point: 50,000+ views in a month with 1000%+ increase
@@ -135,11 +147,17 @@ class DatabaseService {
         const takeoffDate = new Date(takeoffPoint.date)
         daysUntilTakeoff = Math.floor((takeoffDate.getTime() - creationDate.getTime()) / (1000 * 60 * 60 * 24))
 
-        // Count videos uploaded before takeoff month
-        const uploadsBeforeTakeoff = dailyStats
-          .filter((stat) => new Date(stat.stat_date) < takeoffDate)
-          .reduce((sum, stat) => sum + (stat.video_uploads || 0), 0)
-        videosUntilTakeoff = uploadsBeforeTakeoff
+        // Since SocialBlade doesn't provide daily upload data, we can't calculate exact videos until takeoff
+        // We'll estimate based on total uploads and time to takeoff
+        const totalDaysSinceCreation = Math.floor((new Date().getTime() - creationDate.getTime()) / (1000 * 60 * 60 * 24))
+        const daysToTakeoff = Math.floor((takeoffDate.getTime() - creationDate.getTime()) / (1000 * 60 * 60 * 24))
+        const totalUploads = statistics?.total_uploads || 0
+        
+        if (totalDaysSinceCreation > 0 && totalUploads > 0) {
+          // Estimate uploads per day and multiply by days to takeoff
+          const uploadsPerDay = totalUploads / totalDaysSinceCreation
+          videosUntilTakeoff = Math.floor(uploadsPerDay * daysToTakeoff)
+        }
       }
     }
 
@@ -278,19 +296,40 @@ class DatabaseService {
 
   async getChannelStatistics(channelId: string): Promise<ChannelStatistics | null> {
     const supabase = await this.getSupabaseClient()
+    
+    // First get the channel UUID
+    const { data: channelData } = await supabase
+      .from("channels")
+      .select("id")
+      .eq("channel_id", channelId)
+      .single()
+
+    if (!channelData) {
+      console.log(`No channel found for channel_id: ${channelId}`)
+      return null
+    }
+
+    // Then get the statistics using the UUID
     const { data, error } = await supabase
       .from("channel_statistics")
-      .select(`
-        *,
-        channels!inner(channel_id)
-      `)
-      .eq("channels.channel_id", channelId)
+      .select("*")
+      .eq("channel_id", channelData.id)
       .order("snapshot_date", { ascending: false })
       .limit(1)
       .single()
 
-    if (error || !data) return null
-    return this.mapDbStatsToStats(data)
+    if (error) {
+      console.log(`Statistics error for ${channelId}:`, error)
+      return null
+    }
+    
+    if (!data) {
+      console.log(`No statistics found for ${channelId}`)
+      return null
+    }
+    
+    console.log(`Statistics found for ${channelId}:`, data)
+    return this.mapDbStatsToStats(data, channelId)
   }
 
   async updateChannelStatistics(channelId: string, stats: Omit<ChannelStatistics, "id" | "channel_id">): Promise<void> {
@@ -315,19 +354,27 @@ class DatabaseService {
 
   async getChannelRanks(channelId: string): Promise<ChannelRanks | null> {
     const supabase = await this.getSupabaseClient()
+    
+    // First get the channel UUID
+    const { data: channelData } = await supabase
+      .from("channels")
+      .select("id")
+      .eq("channel_id", channelId)
+      .single()
+
+    if (!channelData) return null
+
+    // Then get the ranks using the UUID
     const { data, error } = await supabase
       .from("channel_ranks")
-      .select(`
-        *,
-        channels!inner(channel_id)
-      `)
-      .eq("channels.channel_id", channelId)
+      .select("*")
+      .eq("channel_id", channelData.id)
       .order("rank_date", { ascending: false })
       .limit(1)
       .single()
 
     if (error || !data) return null
-    return this.mapDbRanksToRanks(data)
+    return this.mapDbRanksToRanks(data, channelId)
   }
 
   async updateChannelRanks(channelId: string, ranks: Omit<ChannelRanks, "id" | "channel_id">): Promise<void> {
@@ -352,21 +399,29 @@ class DatabaseService {
 
   async getChannelDailyStats(channelId: string, days = 30): Promise<ChannelDailyStats[]> {
     const supabase = await this.getSupabaseClient()
+    
+    // First get the channel UUID
+    const { data: channelData } = await supabase
+      .from("channels")
+      .select("id")
+      .eq("channel_id", channelId)
+      .single()
+
+    if (!channelData) return []
+
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - days)
 
+    // Then get the daily stats using the UUID
     const { data, error } = await supabase
       .from("channel_daily_stats")
-      .select(`
-        *,
-        channels!inner(channel_id)
-      `)
-      .eq("channels.channel_id", channelId)
+      .select("*")
+      .eq("channel_id", channelData.id)
       .gte("date", cutoffDate.toISOString().split("T")[0])
       .order("date", { ascending: true })
 
     if (error || !data) return []
-    return data.map(this.mapDbDailyStatsToStats)
+    return data.map((item) => this.mapDbDailyStatsToStats(item, channelId))
   }
 
   async addDailyStats(channelId: string, stats: Omit<ChannelDailyStats, "id" | "channel_id">): Promise<void> {
@@ -391,16 +446,24 @@ class DatabaseService {
 
   async getChannelSocialLinks(channelId: string): Promise<ChannelSocialLinks[]> {
     const supabase = await this.getSupabaseClient()
+    
+    // First get the channel UUID
+    const { data: channelData } = await supabase
+      .from("channels")
+      .select("id")
+      .eq("channel_id", channelId)
+      .single()
+
+    if (!channelData) return []
+
+    // Then get the social links using the UUID
     const { data, error } = await supabase
       .from("channel_social_links")
-      .select(`
-        *,
-        channels!inner(channel_id)
-      `)
-      .eq("channels.channel_id", channelId)
+      .select("*")
+      .eq("channel_id", channelData.id)
 
     if (error || !data) return []
-    return data.map(this.mapDbSocialLinksToLinks)
+    return data.map((item) => this.mapDbSocialLinksToLinks(item, channelId))
   }
 
   async updateChannelSocialLinks(
@@ -495,13 +558,23 @@ class DatabaseService {
       status: data.status,
       notes: data.notes,
       custom_fields: data.custom_fields,
+      // SocialBlade specific fields
+      country_code: data.country_code,
+      username: data.username,
+      cusername: data.cusername,
+      website: data.website,
+      grade_color: data.grade_color,
+      grade: data.grade,
+      sb_verified: data.sb_verified,
+      made_for_kids: data.made_for_kids,
+      social_links: data.social_links,
     }
   }
 
-  private mapDbStatsToStats(data: any): ChannelStatistics {
+  private mapDbStatsToStats(data: any, channelId: string): ChannelStatistics {
     return {
       id: data.id,
-      channel_id: data.channels.channel_id,
+      channel_id: channelId,
       total_uploads: data.total_uploads,
       total_subscribers: data.total_subscribers,
       total_views: data.total_views,
@@ -510,10 +583,10 @@ class DatabaseService {
     }
   }
 
-  private mapDbRanksToRanks(data: any): ChannelRanks {
+  private mapDbRanksToRanks(data: any, channelId: string): ChannelRanks {
     return {
       id: data.id,
-      channel_id: data.channels.channel_id,
+      channel_id: channelId,
       subscriber_rank: data.subscriber_rank,
       video_view_rank: data.video_view_rank,
       country_rank: data.country_rank,
@@ -522,22 +595,22 @@ class DatabaseService {
     }
   }
 
-  private mapDbDailyStatsToStats(data: any): ChannelDailyStats {
+  private mapDbDailyStatsToStats(data: any, channelId: string): ChannelDailyStats {
     return {
       id: data.id,
-      channel_id: data.channels.channel_id,
+      channel_id: channelId,
       stat_date: data.date,
       subscribers: data.subscribers,
       views: data.views,
-      estimated_earnings: Number.parseFloat(data.estimated_earnings),
+      estimated_earnings: Number.parseFloat(data.estimated_earnings || 0),
       video_uploads: data.video_uploads,
     }
   }
 
-  private mapDbSocialLinksToLinks(data: any): ChannelSocialLinks {
+  private mapDbSocialLinksToLinks(data: any, channelId: string): ChannelSocialLinks {
     return {
       id: data.id,
-      channel_id: data.channels.channel_id,
+      channel_id: channelId,
       platform: data.platform,
       url: data.url,
     }

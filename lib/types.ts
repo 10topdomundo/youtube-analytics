@@ -21,6 +21,17 @@ export interface Channel {
   status?: string
   notes?: string
   custom_fields?: Record<string, any>
+
+  // SocialBlade specific fields (from actual database schema)
+  country_code?: string
+  username?: string
+  cusername?: string
+  website?: string
+  grade_color?: string
+  grade?: string
+  sb_verified?: boolean
+  made_for_kids?: boolean
+  social_links?: Record<string, any>
 }
 
 export interface ChannelStatistics {
@@ -212,4 +223,5 @@ export interface ChannelCalculatedMetrics {
 
 export interface ChannelWithMetrics extends Channel {
   calculated: ChannelCalculatedMetrics
+  statistics?: ChannelStatistics | null
 }

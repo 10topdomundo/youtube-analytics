@@ -38,7 +38,13 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
       const channelData = await response.json()
       setChannels(channelData)
       if (!selectedChannelId && channelData.length > 0) {
-        setSelectedChannelId(channelData[0].channel_id)
+        // Find the first channel with a valid channel_id
+        const validChannel = channelData.find((channel: any) => 
+          channel.channel_id && channel.channel_id.trim() !== ""
+        )
+        if (validChannel) {
+          setSelectedChannelId(validChannel.channel_id)
+        }
       }
     } catch (error) {
       console.error("Failed to load channels:", error)
@@ -124,11 +130,13 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
               <SelectValue placeholder="Select channel" />
             </SelectTrigger>
             <SelectContent>
-              {channels.map((channel) => (
-                <SelectItem key={channel.channel_id} value={channel.channel_id}>
-                  {channel.display_name || channel.channel_name}
-                </SelectItem>
-              ))}
+              {channels
+                .filter((channel) => channel.channel_id && channel.channel_id.trim() !== "")
+                .map((channel) => (
+                  <SelectItem key={channel.channel_id} value={channel.channel_id}>
+                    {channel.display_name || channel.channel_name}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
 

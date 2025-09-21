@@ -31,12 +31,24 @@ export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
   }
 
   const getInitials = (name: string | null | undefined) => {
-    if (!name) return user.email?.charAt(0).toUpperCase() || "U"
-    return name
-      .split(" ")
-      .map((n) => n.charAt(0))
-      .join("")
-      .toUpperCase()
+    if (!name?.trim()) {
+      // Fallback to email first letter or "U"
+      return user.email?.charAt(0).toUpperCase() || "U"
+    }
+    
+    // Clean the name and split by spaces
+    const nameParts = name.trim().split(/\s+/).filter(part => part.length > 0)
+    
+    if (nameParts.length === 0) {
+      return user.email?.charAt(0).toUpperCase() || "U"
+    }
+    
+    // Take first letter of first name and last name (max 2 letters)
+    if (nameParts.length === 1) {
+      return nameParts[0].charAt(0).toUpperCase()
+    }
+    
+    return (nameParts[0].charAt(0) + nameParts[nameParts.length - 1].charAt(0)).toUpperCase()
   }
 
   return (
@@ -45,7 +57,7 @@ export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h2 className="text-lg font-semibold">YouTube Analytics</h2>
-            {profile?.is_admin && (
+            {profile?.role === "admin" && (
               <div className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-xs">
                 <Shield className="w-3 h-3" />
                 Admin
@@ -61,7 +73,9 @@ export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
                     src={user.user_metadata?.avatar_url || "/placeholder.svg"}
                     alt={profile?.display_name || user.email || ""}
                   />
-                  <AvatarFallback>{getInitials(profile?.display_name)}</AvatarFallback>
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xs font-medium">
+                    {getInitials(profile?.display_name)}
+                  </AvatarFallback>
                 </Avatar>
               </Button>
             </DropdownMenuTrigger>

@@ -9,13 +9,30 @@ export default async function DashboardPage() {
 
   console.log("[v0] Dashboard - User:", user?.id)
   console.log("[v0] Dashboard - Profile:", profile)
-  console.log("[v0] Dashboard - Is Admin:", profile?.is_admin)
+  console.log("[v0] Dashboard - Is Admin:", profile?.role === "admin")
 
   if (!user) {
     redirect("/")
   }
 
-  if (profile?.is_admin) {
+  // If no profile exists, show a message or create one manually
+  if (!profile) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-md mx-auto bg-card text-card-foreground rounded-lg border p-6">
+          <h2 className="text-lg font-semibold mb-2">Profile Setup Required</h2>
+          <p className="text-muted-foreground mb-4">
+            Your user profile needs to be created. Please contact an administrator or try refreshing the page.
+          </p>
+          <p className="text-sm text-muted-foreground">
+            User ID: {user.id}
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (profile?.role === "admin") {
     console.log("[v0] Rendering AdminDashboard for admin user")
     return <AdminDashboard user={user} profile={profile} />
   }

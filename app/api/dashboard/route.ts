@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { AnalyticsService } from "@/lib/analytics-service"
+
+export const dynamic = 'force-dynamic'
 import type { TimePeriod } from "@/lib/types"
 
 export async function GET(request: NextRequest) {

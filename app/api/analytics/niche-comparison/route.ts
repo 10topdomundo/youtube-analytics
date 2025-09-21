@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server"
 import { AnalyticsService } from "@/lib/analytics-service"
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: Request) {
   try {
     console.log("[v0] Niche comparison API route called")

@@ -1,10 +1,10 @@
 import { createClient } from "./supabase/server"
 
 export interface UserProfile {
-  id: string
   user_id: string
   display_name: string | null
-  is_admin: boolean
+  email: string | null
+  role: string | null
   created_at: string
 }
 
@@ -24,7 +24,7 @@ export async function getCurrentUser() {
 
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
   const supabase = await createClient()
-  const { data, error } = await supabase.from("user_profiles").select("*").eq("user_id", userId).single()
+  const { data, error } = await supabase.from("profiles").select("*").eq("user_id", userId).single()
 
   if (error || !data) {
     return null
@@ -43,25 +43,10 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
   console.log("[v0] User profile loaded:", profile)
 
   if (!profile) {
-    console.log("[v0] No profile found, attempting to create one")
-    const supabase = await createClient()
-    const { data: newProfile, error } = await supabase
-      .from("user_profiles")
-      .insert({
-        user_id: user.id,
-        display_name: user.email || "User",
-        is_admin: false,
-      })
-      .select()
-      .single()
-
-    if (error) {
-      console.log("[v0] Error creating profile:", error)
-      return null
-    }
-
-    console.log("[v0] Created new profile:", newProfile)
-    return newProfile
+    console.log("[v0] No profile found, but not attempting to create one to avoid infinite recursion")
+    // Don't try to create profile here - let the trigger handle it or create it manually
+    // This prevents infinite recursion issues with RLS policies
+    return null
   }
 
   return profile
@@ -69,5 +54,5 @@ export async function getCurrentUserProfile(): Promise<UserProfile | null> {
 
 export async function isAdmin(): Promise<boolean> {
   const profile = await getCurrentUserProfile()
-  return profile?.is_admin || false
+  return profile?.role === "admin" || false
 }
