@@ -25,11 +25,9 @@ interface NicheAgeData {
   niche: string
   fresh: number
   aged: number
-  vintage: number
   total: number
   freshPercent: number
   agedPercent: number
-  vintagePercent: number
 }
 
 interface PieChartData {
@@ -41,7 +39,6 @@ interface PieChartData {
 const AGE_COLORS = {
   fresh: "#10b981", // Green
   aged: "#f59e0b",  // Orange
-  vintage: "#ef4444" // Red
 }
 
 const NICHE_COLORS = [
@@ -58,10 +55,8 @@ export function AgeAnalyticsDashboard() {
     totalChannels: 0,
     freshCount: 0,
     agedCount: 0,
-    vintageCount: 0,
     freshPercent: 0,
     agedPercent: 0,
-    vintagePercent: 0
   })
 
   useEffect(() => {
@@ -94,8 +89,6 @@ export function AgeAnalyticsDashboard() {
             ageClassification = "fresh"
           } else if (creationYear >= 2006) {
             ageClassification = "aged"
-          } else {
-            ageClassification = "vintage"
           }
         }
         
@@ -132,19 +125,16 @@ export function AgeAnalyticsDashboard() {
     nicheGroups.forEach((channelList, niche) => {
       const fresh = channelList.filter(c => c.age_classification === "fresh").length
       const aged = channelList.filter(c => c.age_classification === "aged").length
-      const vintage = channelList.filter(c => c.age_classification === "vintage").length
-      const total = fresh + aged + vintage
+      const total = fresh + aged
       
       if (total > 0) {
         nicheData.push({
           niche,
           fresh,
           aged,
-          vintage,
           total,
           freshPercent: (fresh / total) * 100,
           agedPercent: (aged / total) * 100,
-          vintagePercent: (vintage / total) * 100
         })
       }
     })
@@ -157,23 +147,19 @@ export function AgeAnalyticsDashboard() {
     const totalChannels = channels.length
     const freshCount = channels.filter(c => c.age_classification === "fresh").length
     const agedCount = channels.filter(c => c.age_classification === "aged").length
-    const vintageCount = channels.filter(c => c.age_classification === "vintage").length
     
     setOverallStats({
       totalChannels,
       freshCount,
       agedCount,
-      vintageCount,
       freshPercent: totalChannels > 0 ? (freshCount / totalChannels) * 100 : 0,
       agedPercent: totalChannels > 0 ? (agedCount / totalChannels) * 100 : 0,
-      vintagePercent: totalChannels > 0 ? (vintageCount / totalChannels) * 100 : 0
     })
   }
 
   const getOverallPieData = (): PieChartData[] => [
     { name: "Fresh (2020+)", value: overallStats.freshCount, color: AGE_COLORS.fresh },
     { name: "Aged (2006-2019)", value: overallStats.agedCount, color: AGE_COLORS.aged },
-    { name: "Vintage (Pre-2006)", value: overallStats.vintageCount, color: AGE_COLORS.vintage }
   ].filter(item => item.value > 0)
 
   const getNichePieData = (): PieChartData[] => {
@@ -190,8 +176,7 @@ export function AgeAnalyticsDashboard() {
       return [
         { name: "Fresh (2020+)", value: nicheData.fresh, color: AGE_COLORS.fresh },
         { name: "Aged (2006-2019)", value: nicheData.aged, color: AGE_COLORS.aged },
-        { name: "Vintage (Pre-2006)", value: nicheData.vintage, color: AGE_COLORS.vintage }
-      ].filter(item => item.value > 0)
+      ].filter(item => item.value > 0).filter(item => item.value > 0)
     }
   }
 
@@ -201,7 +186,6 @@ export function AgeAnalyticsDashboard() {
       fullNiche: niche.niche,
       Fresh: niche.fresh,
       Aged: niche.aged,
-      Vintage: niche.vintage,
       Total: niche.total
     }))
   }
@@ -287,19 +271,6 @@ export function AgeAnalyticsDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500" />
-              <div>
-                <p className="text-2xl font-bold text-red-600">{overallStats.vintageCount}</p>
-                <p className="text-sm text-muted-foreground">
-                  Vintage ({overallStats.vintagePercent.toFixed(1)}%)
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
       <Tabs defaultValue="overview" className="w-full">
@@ -440,15 +411,10 @@ export function AgeAnalyticsDashboard() {
                           className="bg-orange-500"
                           style={{ width: `${niche.agedPercent}%` }}
                         />
-                        <div 
-                          className="bg-red-500"
-                          style={{ width: `${niche.vintagePercent}%` }}
-                        />
                       </div>
                       <div className="flex justify-between text-xs text-muted-foreground">
                         <span>{niche.fresh} Fresh</span>
                         <span>{niche.aged} Aged</span>
-                        <span>{niche.vintage} Vintage</span>
                       </div>
                     </div>
                   ))}
@@ -478,7 +444,6 @@ export function AgeAnalyticsDashboard() {
                   <Legend />
                   <Bar dataKey="Fresh" fill={AGE_COLORS.fresh} />
                   <Bar dataKey="Aged" fill={AGE_COLORS.aged} />
-                  <Bar dataKey="Vintage" fill={AGE_COLORS.vintage} />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
@@ -498,8 +463,8 @@ export function AgeAnalyticsDashboard() {
                       <th className="text-right p-2">Total</th>
                       <th className="text-right p-2">Fresh</th>
                       <th className="text-right p-2">Aged</th>
-                      <th className="text-right p-2">Vintage</th>
                       <th className="text-right p-2">Fresh %</th>
+                      <th className="text-right p-2">Aged %</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -509,8 +474,8 @@ export function AgeAnalyticsDashboard() {
                         <td className="p-2 text-right">{niche.total}</td>
                         <td className="p-2 text-right text-green-600">{niche.fresh}</td>
                         <td className="p-2 text-right text-orange-600">{niche.aged}</td>
-                        <td className="p-2 text-right text-red-600">{niche.vintage}</td>
                         <td className="p-2 text-right">{niche.freshPercent.toFixed(1)}%</td>
+                        <td className="p-2 text-right">{niche.agedPercent.toFixed(1)}%</td>
                       </tr>
                     ))}
                   </tbody>
@@ -523,3 +488,4 @@ export function AgeAnalyticsDashboard() {
     </div>
   )
 }
+

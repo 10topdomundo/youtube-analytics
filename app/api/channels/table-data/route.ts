@@ -3,9 +3,23 @@ import { databaseService } from "@/lib/database-service"
 
 export const dynamic = 'force-dynamic'
 
+// Simple in-memory cache for table data
+let tableDataCache: any = null
+let cacheTimestamp: number = 0
+const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+
 export async function GET() {
   try {
     console.log("=== Table Data API Debug ===")
+    
+    // Check cache first
+    const now = Date.now()
+    if (tableDataCache && (now - cacheTimestamp) < CACHE_DURATION) {
+      console.log("Returning cached table data")
+      return NextResponse.json(tableDataCache)
+    }
+
+    console.log("Fetching fresh table data...")
     const channels = await databaseService.getAllChannelsWithMetrics()
     console.log("Channels fetched:", channels.length)
     
@@ -44,12 +58,8 @@ export async function GET() {
       views_delta_3_days: channel.calculated?.views_delta_3_days ? 
         `${channel.calculated.views_delta_3_days.toFixed(1)}%` : "0%",
       views_per_subscriber: channel.calculated?.views_per_subscriber || 0,
-      uploads_last_30d: channel.calculated?.uploads_last_30_days || 0,
       
-      // Takeoff metrics (calculated)
-      videos_until_takeoff: channel.calculated?.videos_until_takeoff || 0,
-      days_until_takeoff: channel.calculated?.days_until_takeoff || 0,
-      days_creation_to_first_upload: channel.calculated?.days_creation_to_first_upload || 0,
+      // Removed assumption-based fields that were incorrectly calculated
       
       // Channel info (editable)
       channel_creation: channel.channel_created_date ? 
@@ -74,6 +84,10 @@ export async function GET() {
       total_views: tableData[0].total_views
     } : "No data")
     console.log("=== End Table Data API Debug ===")
+
+    // Cache the result
+    tableDataCache = tableData
+    cacheTimestamp = now
 
     return NextResponse.json(tableData)
   } catch (error) {
@@ -120,10 +134,6 @@ export async function PUT(request: NextRequest) {
           "views_delta_7_days", 
           "views_delta_3_days",
           "views_per_subscriber",
-          "uploads_last_30d",
-          "videos_until_takeoff",
-          "days_until_takeoff",
-          "days_creation_to_first_upload",
           // Editable fields
           "channel_creation",
           "thumbnail_style",
@@ -146,6 +156,10 @@ export async function PUT(request: NextRequest) {
         })
       }
     }
+
+    // Invalidate cache after updates
+    tableDataCache = null
+    cacheTimestamp = 0
 
     return NextResponse.json({ success: true })
   } catch (error) {

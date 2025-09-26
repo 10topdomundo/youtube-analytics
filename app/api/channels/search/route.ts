@@ -15,6 +15,7 @@ interface ChannelSearchResult {
   video_count?: number
   created_date?: string
   country?: string
+  website_url?: string
   is_terminated?: boolean
   termination_reason?: string
   description?: string
@@ -101,8 +102,8 @@ export async function POST(request: NextRequest) {
         video_count: rawResponse.statistics?.total?.uploads,
         created_date: rawResponse.general?.created_at,
         country: rawResponse.general?.geo?.country,
-        is_terminated: false,
-        description: rawResponse.general?.branding?.website // Using website as description for now
+        website_url: rawResponse.general?.branding?.website,
+        is_terminated: false
       }
 
       console.log("Processed channel data:", channelData)

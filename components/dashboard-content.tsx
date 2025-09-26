@@ -7,8 +7,9 @@ import { DataVisualizations } from "@/components/data-visualizations"
 import { ChannelDataTable } from "@/components/channel-data-table"
 import { FolderManagement } from "@/components/folder-management"
 import { AgeAnalyticsDashboard } from "@/components/age-analytics-dashboard"
+import { TopNichesDashboard } from "@/components/top-niches-dashboard"
 import { DashboardHeader } from "@/components/dashboard-header"
-import { BarChart3, TrendingUp, Users, Table, Folder, PieChart } from "lucide-react"
+import { BarChart3, TrendingUp, Users, Table, Folder, PieChart, Crown } from "lucide-react"
 import type { User } from "@supabase/supabase-js"
 import type { UserProfile } from "@/lib/auth"
 
@@ -33,10 +34,14 @@ export function DashboardContent({ user, profile }: DashboardContentProps) {
 
         {/* Main Navigation */}
         <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:grid-cols-6">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />
               <span className="hidden sm:inline">Dashboard</span>
+            </TabsTrigger>
+            <TabsTrigger value="top-niches" className="flex items-center gap-2">
+              <Crown className="w-4 h-4" />
+              <span className="hidden sm:inline">Top Niches</span>
             </TabsTrigger>
             <TabsTrigger value="folders" className="flex items-center gap-2">
               <Folder className="w-4 h-4" />
@@ -68,6 +73,9 @@ export function DashboardContent({ user, profile }: DashboardContentProps) {
             <AnalyticsDashboard />
           </TabsContent>
 
+          <TabsContent value="top-niches">
+            <TopNichesDashboard />
+          </TabsContent>
 
           <TabsContent value="folders">
             <FolderManagement isAdmin={profile?.role === "admin" || false} />

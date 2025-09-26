@@ -4,8 +4,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 // Removed DropdownMenu imports - using custom dropdown instead
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
-import { LogOut, Shield } from "lucide-react"
+import { LogOut, Shield, Moon, Sun } from "lucide-react"
 import { useState } from "react"
+import { useTheme } from "next-themes"
 import type { User } from "@supabase/supabase-js"
 import type { UserProfile } from "@/lib/auth"
 
@@ -17,6 +18,7 @@ interface DashboardHeaderProps {
 export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
   const router = useRouter()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const { theme, setTheme } = useTheme()
 
   const handleSignOut = async () => {
     try {
@@ -69,7 +71,20 @@ export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
             )}
           </div>
 
-          <div className="relative">
+          <div className="flex items-center gap-2">
+            {/* Dark mode toggle */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="h-9 w-9"
+            >
+              <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+              <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+              <span className="sr-only">Toggle theme</span>
+            </Button>
+
+            <div className="relative">
               <Button 
                 variant="ghost" 
                 className="relative h-10 w-10 rounded-full hover:bg-accent border border-border focus:outline-none focus:ring-2 focus:ring-primary"
@@ -116,6 +131,7 @@ export function DashboardHeader({ user, profile }: DashboardHeaderProps) {
                   onClick={() => setDropdownOpen(false)}
                 />
               )}
+            </div>
           </div>
         </div>
       </div>

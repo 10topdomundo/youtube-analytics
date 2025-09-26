@@ -3,7 +3,8 @@
 import type React from "react"
 
 import { useState, useEffect } from "react"
-import { Plus, Edit, Trash2, Search, Filter, RefreshCw, Loader2 } from "lucide-react"
+import { Plus, Edit, Trash2, Search, Filter, RefreshCw, Loader2, StickyNote, ExternalLink, MoreHorizontal } from "lucide-react"
+import { NotesModal } from "./notes-modal"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -51,8 +52,15 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [resyncingChannels, setResyncingChannels] = useState<Set<string>>(new Set())
+  const [openActionsDropdown, setOpenActionsDropdown] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [statsLoading, setStatsLoading] = useState(false)
   const [inputType, setInputType] = useState<'channel_id' | 'handle'>('channel_id')
+  const [notesModal, setNotesModal] = useState<{ isOpen: boolean; channelId: string; channelName: string }>({
+    isOpen: false,
+    channelId: "",
+    channelName: "",
+  })
   const [channelInput, setChannelInput] = useState("")
   const [isSearching, setIsSearching] = useState(false)
   const [historyOption, setHistoryOption] = useState<'default' | 'extended' | 'archive'>('default')
@@ -62,19 +70,25 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
     display_name: "",
     handle: "",
     niche: "",
-    country_code: "",
-    country: "",
+    language: "",
     website_url: "",
     channel_creation_date: "",
+    notes: "",
   })
 
   useEffect(() => {
     const loadInitialData = async () => {
       setIsLoading(true)
       try {
-        await Promise.all([loadChannels(), loadChannelStatistics()])
-      } finally {
+        // Load channels first, then stats separately to show channels faster
+        await loadChannels()
         setIsLoading(false)
+        
+        // Load stats in background
+        setStatsLoading(true)
+        await loadChannelStatistics()
+      } finally {
+        setStatsLoading(false)
       }
     }
     loadInitialData()
@@ -179,8 +193,8 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
         }
 
         // Automatically fetch SocialBlade data for the new channel
-        console.log("Automatically fetching SocialBlade data for new channel...")
-        await fetchSocialBladeData(formData.channel_id, formData.handle)
+        console.log("Automatically fetching SocialBlade data for new channel with history:", historyOption)
+        await fetchSocialBladeData(formData.channel_id, formData.handle, historyOption)
       }
 
       await loadChannels()
@@ -235,10 +249,10 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
         display_name: channelData.channel_name || "",
         handle: channelData.handle || "",
         niche: "",
-        country_code: channelData.country || "",
-        country: channelData.country || "",
-        website_url: "",
+        language: "",
+        website_url: channelData.website_url || "",
         channel_creation_date: channelData.created_date ? channelData.created_date.split("T")[0] : "",
+        notes: "",
       })
 
       return channelData
@@ -250,7 +264,7 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
     }
   }
 
-  const fetchSocialBladeData = async (channelId: string, handle?: string) => {
+  const fetchSocialBladeData = async (channelId: string, handle?: string, history: 'default' | 'extended' | 'archive' = 'default') => {
     try {
       // Use handle if available, otherwise use channel_id
       const query = handle || channelId
@@ -262,6 +276,7 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
         },
         body: JSON.stringify({
           query: query,
+          history: history,
         }),
       })
 
@@ -293,10 +308,26 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
       display_name: channel.channel_name,
       handle: channel.channel_handle || "",
       niche: channel.channel_niche || "",
-      country_code: channel.channel_country || "",
-      country: channel.channel_country || "",
-      website_url: "",
+      language: channel.channel_language || "",
+      website_url: channel.website || "",
       channel_creation_date: channel.channel_created_date ? channel.channel_created_date.split("T")[0] : "",
+      notes: channel.notes || "",
+    })
+  }
+
+  const handleOpenNotes = (channel: Channel) => {
+    setNotesModal({
+      isOpen: true,
+      channelId: channel.channel_id,
+      channelName: channel.channel_name,
+    })
+  }
+
+  const handleCloseNotes = () => {
+    setNotesModal({
+      isOpen: false,
+      channelId: "",
+      channelName: "",
     })
   }
 
@@ -319,7 +350,7 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
     }
   }
 
-  const handleResyncChannel = async (channelId: string) => {
+  const handleResyncChannel = async (channelId: string, history: 'default' | 'extended' | 'archive' = 'default') => {
     // Add channel to resyncing set
     setResyncingChannels(prev => new Set(prev).add(channelId))
     
@@ -331,15 +362,22 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
         return
       }
 
-      console.log("Resyncing channel data for:", channel.channel_name)
+      console.log("Resyncing channel data for:", channel.channel_name, "with history:", history)
       
-      // Use the shared fetchSocialBladeData function
-      await fetchSocialBladeData(channelId, channel.channel_handle)
+      // Use the shared fetchSocialBladeData function with history parameter
+      await fetchSocialBladeData(channelId, channel.channel_handle, history)
 
       // Reload channel statistics after successful fetch
       await loadChannelStatistics()
       console.log("Channel resynced successfully:", channel.channel_name)
-      alert(`Channel "${channel.channel_name}" resynced successfully!`)
+      
+      const historyLabels = {
+        default: "Default (30 days)",
+        extended: "Extended (1 year)",
+        archive: "Archive (3 years)"
+      }
+      
+      alert(`Channel "${channel.channel_name}" resynced successfully with ${historyLabels[history]} data!`)
     } catch (error) {
       console.error("Failed to resync channel:", error)
       alert("Failed to resync channel data from SocialBlade. Please try again.")
@@ -360,10 +398,10 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
       display_name: "",
       handle: "",
       niche: "",
-      country_code: "",
-      country: "",
+      language: "",
       website_url: "",
       channel_creation_date: "",
+      notes: "",
     })
     setChannelInput("")
     setInputType('channel_id')
@@ -595,12 +633,12 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="country">Country</Label>
+                    <Label htmlFor="language">Language</Label>
                     <Input
-                      id="country"
-                      value={formData.country}
-                      onChange={(e) => setFormData({ ...formData, country: e.target.value })}
-                      placeholder="United States"
+                      id="language"
+                      value={formData.language}
+                      onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                      placeholder="English"
                     />
                   </div>
                 </div>
@@ -623,6 +661,16 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
                     type="date"
                     value={formData.channel_creation_date}
                     onChange={(e) => setFormData({ ...formData, channel_creation_date: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Notes</Label>
+                  <Input
+                    id="notes"
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Add any notes about this channel..."
                   />
                 </div>
 
@@ -735,36 +783,119 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
                     <AvatarFallback>{channel.channel_name?.charAt(0) || "?"}</AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1">
-                    <CardTitle className="text-lg truncate">{channel.channel_name}</CardTitle>
+                    <CardTitle className="text-lg truncate flex items-center gap-2">
+                      {channel.channel_name}
+                      <a 
+                        href={`https://youtube.com/channel/${channel.channel_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-primary transition-colors"
+                        title="Open YouTube channel"
+                      >
+                        <ExternalLink className="w-4 h-4" />
+                      </a>
+                    </CardTitle>
                     <p className="text-sm text-muted-foreground truncate">{channel.channel_handle || channel.channel_name}</p>
                   </div>
                 </div>
                 {isAdmin && (
-                  <div className="flex space-x-1">
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      onClick={() => handleResyncChannel(channel.channel_id)}
-                      title="Resync channel data from SocialBlade"
-                      disabled={resyncingChannels.has(channel.channel_id)}
-                    >
-                      {resyncingChannels.has(channel.channel_id) ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        <RefreshCw className="w-4 h-4" />
-                      )}
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => handleEdit(channel)}>
-                      <Edit className="w-4 h-4" />
-                    </Button>
+                  <div className="relative">
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => handleDelete(channel.channel_id)}
-                      className="text-destructive hover:text-destructive"
+                      onClick={() => setOpenActionsDropdown(openActionsDropdown === channel.channel_id ? null : channel.channel_id)}
+                      title="Channel actions"
                     >
-                      <Trash2 className="w-4 h-4" />
+                      <MoreHorizontal className="w-4 h-4" />
                     </Button>
+
+                    {openActionsDropdown === channel.channel_id && (
+                      <>
+                        {/* Backdrop to close dropdown */}
+                        <div 
+                          className="fixed inset-0 z-40" 
+                          onClick={() => setOpenActionsDropdown(null)}
+                        />
+                        
+                        {/* Actions dropdown content */}
+                        <div className="absolute right-0 top-full mt-1 z-50 min-w-[220px] bg-background border border-border rounded-md shadow-lg py-1">
+                          {/* Resync options */}
+                          <div className="px-3 py-1 text-xs font-medium text-muted-foreground border-b border-border">
+                            Resync Options
+                          </div>
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 transition-colors"
+                            onClick={() => {
+                              handleResyncChannel(channel.channel_id, 'default')
+                              setOpenActionsDropdown(null)
+                            }}
+                            disabled={resyncingChannels.has(channel.channel_id)}
+                          >
+                            {resyncingChannels.has(channel.channel_id) ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                            Default (30 days) - 1 credit
+                          </button>
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 transition-colors"
+                            onClick={() => {
+                              handleResyncChannel(channel.channel_id, 'extended')
+                              setOpenActionsDropdown(null)
+                            }}
+                            disabled={resyncingChannels.has(channel.channel_id)}
+                          >
+                            {resyncingChannels.has(channel.channel_id) ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                            Extended (1 year) - 2 credits
+                          </button>
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 transition-colors"
+                            onClick={() => {
+                              handleResyncChannel(channel.channel_id, 'archive')
+                              setOpenActionsDropdown(null)
+                            }}
+                            disabled={resyncingChannels.has(channel.channel_id)}
+                          >
+                            {resyncingChannels.has(channel.channel_id) ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="w-4 h-4" />
+                            )}
+                            Archive (3 years) - 3 credits
+                          </button>
+                          
+                          {/* Separator */}
+                          <div className="border-t border-border my-1" />
+                          
+                          {/* Other actions */}
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 transition-colors"
+                            onClick={() => {
+                              handleOpenNotes(channel)
+                              setOpenActionsDropdown(null)
+                            }}
+                          >
+                            <StickyNote className="w-4 h-4" />
+                            View Notes
+                          </button>
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex items-center gap-2 transition-colors text-destructive hover:text-destructive"
+                            onClick={() => {
+                              handleDelete(channel.channel_id)
+                              setOpenActionsDropdown(null)
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            Delete Channel
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -782,19 +913,28 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground">Subscribers</p>
-                  <p className="font-semibold">
-                    {(() => {
-                      const stats = channelStats[channel.id || '']
-                      console.log(`Channel ${channel.channel_name} (${channel.id}):`, stats)
-                      return formatNumber(stats?.total_subscribers || 0)
-                    })()}
-                  </p>
+                  {statsLoading ? (
+                    <div className="h-4 bg-muted rounded w-16 animate-pulse"></div>
+                  ) : (
+                    <p className="font-semibold">
+                      {formatNumber(channelStats[channel.id || '']?.total_subscribers || 0)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-muted-foreground">Views</p>
-                  <p className="font-semibold">
-                    {formatNumber(channelStats[channel.id || '']?.total_views || 0)}
-                  </p>
+                  {statsLoading ? (
+                    <div className="h-4 bg-muted rounded w-16 animate-pulse"></div>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="font-semibold">
+                        {formatNumber(channelStats[channel.id || '']?.total_views || 0)}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatNumber(channelStats[channel.id || '']?.views_last_30_days || 0)} (30d)
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -811,6 +951,14 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
         </div>
       )}
       </div>
+
+      {/* Notes Modal */}
+      <NotesModal
+        isOpen={notesModal.isOpen}
+        onClose={handleCloseNotes}
+        channelId={notesModal.channelId}
+        channelName={notesModal.channelName}
+      />
     </div>
   )
 }

@@ -34,20 +34,22 @@ class DatabaseService {
 
   async getAllChannelsWithMetrics(): Promise<ChannelWithMetrics[]> {
     const channels = await this.getAllChannels()
-    const channelsWithMetrics: ChannelWithMetrics[] = []
-
-    for (const channel of channels) {
-      const calculated = await this.calculateChannelMetrics(channel.channel_id)
-      const statistics = await this.getChannelStatistics(channel.channel_id)
+    
+    // Optimize by running all calculations in parallel and passing channel data to avoid redundant queries
+    const metricsPromises = channels.map(async (channel) => {
+      const [calculated, statistics] = await Promise.all([
+        this.calculateChannelMetricsOptimized(channel),
+        this.getChannelStatistics(channel.channel_id)
+      ])
       
-      channelsWithMetrics.push({
+      return {
         ...channel,
         calculated,
-        statistics, // Add statistics to the channel data
-      })
-    }
+        statistics,
+      }
+    })
 
-    return channelsWithMetrics
+    return await Promise.all(metricsPromises)
   }
 
   async calculateChannelMetrics(channelId: string): Promise<ChannelCalculatedMetrics> {
@@ -64,7 +66,6 @@ class DatabaseService {
         views_delta_7_days: 0,
         views_delta_3_days: 0,
         views_per_subscriber: 0,
-        uploads_last_30_days: 0,
       }
     }
 
@@ -96,56 +97,11 @@ class DatabaseService {
     const delta7Days = prevViews7Days > 0 ? ((views7Days - prevViews7Days) / prevViews7Days) * 100 : 0
     const delta3Days = prevViews3Days > 0 ? ((views3Days - prevViews3Days) / prevViews3Days) * 100 : 0
 
-    // Calculate uploads in last 30 days
-    // Note: SocialBlade doesn't provide daily upload counts, so we'll estimate
-    let uploads30Days = 0
-    if (channel?.channel_created_date && statistics?.total_uploads) {
-      const creationDate = new Date(channel.channel_created_date)
-      const totalDaysSinceCreation = Math.floor((new Date().getTime() - creationDate.getTime()) / (1000 * 60 * 60 * 24))
-      
-      if (totalDaysSinceCreation > 0) {
-        const uploadsPerDay = statistics.total_uploads / totalDaysSinceCreation
-        uploads30Days = Math.floor(uploadsPerDay * 30) // Estimate for last 30 days
-      }
-    }
-
     // Calculate views per subscriber
     const currentSubscribers = statistics?.total_subscribers || 0
     const viewsPerSubscriber = currentSubscribers > 0 ? views30Days / currentSubscribers : 0
 
-    let videosUntilTakeoff: number | undefined
-    let daysUntilTakeoff: number | undefined
-    let daysCreationToFirstUpload: number | undefined
-
-    if (channel?.channel_created_date) {
-      const creationDate = new Date(channel.channel_created_date)
-      
-      // Since SocialBlade doesn't provide daily upload data, we can't determine the exact first upload date
-      // We'll estimate based on the assumption that uploads started shortly after channel creation
-      // For channels with uploads, assume first upload was within 30 days of creation
-      if (statistics?.total_uploads && statistics.total_uploads > 0) {
-        daysCreationToFirstUpload = 30 // Estimated - SocialBlade doesn't provide this data
-      }
-
-      // Find takeoff point: 50,000+ views in a month with 1000%+ increase
-      const takeoffPoint = this.findTakeoffPoint(dailyStats)
-      if (takeoffPoint && channel.channel_created_date) {
-        const takeoffDate = new Date(takeoffPoint.date)
-        daysUntilTakeoff = Math.floor((takeoffDate.getTime() - creationDate.getTime()) / (1000 * 60 * 60 * 24))
-
-        // Since SocialBlade doesn't provide daily upload data, we can't calculate exact videos until takeoff
-        // We'll estimate based on total uploads and time to takeoff
-        const totalDaysSinceCreation = Math.floor((new Date().getTime() - creationDate.getTime()) / (1000 * 60 * 60 * 24))
-        const daysToTakeoff = Math.floor((takeoffDate.getTime() - creationDate.getTime()) / (1000 * 60 * 60 * 24))
-        const totalUploads = statistics?.total_uploads || 0
-        
-        if (totalDaysSinceCreation > 0 && totalUploads > 0) {
-          // Estimate uploads per day and multiply by days to takeoff
-          const uploadsPerDay = totalUploads / totalDaysSinceCreation
-          videosUntilTakeoff = Math.floor(uploadsPerDay * daysToTakeoff)
-        }
-      }
-    }
+    // Removed all assumption-based calculations - SocialBlade doesn't provide this data
 
     return {
       views_last_30_days: views30Days,
@@ -155,68 +111,74 @@ class DatabaseService {
       views_delta_7_days: delta7Days,
       views_delta_3_days: delta3Days,
       views_per_subscriber: viewsPerSubscriber,
-      uploads_last_30_days: uploads30Days,
-      videos_until_takeoff: videosUntilTakeoff,
-      days_until_takeoff: daysUntilTakeoff,
-      days_creation_to_first_upload: daysCreationToFirstUpload,
     }
   }
 
-  private findTakeoffPoint(dailyStats: ChannelDailyStats[]): { date: string; views: number } | null {
-    if (dailyStats.length < 60) return null // Need at least 2 months of data
+  async calculateChannelMetricsOptimized(channel: Channel): Promise<ChannelCalculatedMetrics> {
+    // This version avoids redundant getChannel call since we already have the channel data
+    const [dailyStats, statistics] = await Promise.all([
+      this.getChannelDailyStats(channel.channel_id, 365), // Get full year for takeoff analysis
+      this.getChannelStatistics(channel.channel_id)
+    ])
 
-    // Group stats by month
-    const monthlyStats = new Map<string, { views: number; date: string }>()
-
-    for (const stat of dailyStats) {
-      const date = new Date(stat.stat_date)
-      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
-
-      if (!monthlyStats.has(monthKey)) {
-        monthlyStats.set(monthKey, { views: 0, date: stat.stat_date })
-      }
-
-      const monthData = monthlyStats.get(monthKey)!
-      monthData.views += stat.views
-    }
-
-    const months = Array.from(monthlyStats.entries()).sort((a, b) => a[0].localeCompare(b[0]))
-
-    // Find first month with 50,000+ views and 1000%+ increase
-    for (let i = 1; i < months.length; i++) {
-      const currentMonth = months[i][1]
-      const previousMonth = months[i - 1][1]
-
-      if (currentMonth.views >= 50000 && previousMonth.views > 0) {
-        const increasePercent = ((currentMonth.views - previousMonth.views) / previousMonth.views) * 100
-
-        if (increasePercent >= 1000) {
-          return {
-            date: currentMonth.date,
-            views: currentMonth.views,
-          }
-        }
+    if (dailyStats.length === 0) {
+      return {
+        views_last_30_days: 0,
+        views_last_7_days: 0,
+        views_last_3_days: 0,
+        views_delta_30_days: 0,
+        views_delta_7_days: 0,
+        views_delta_3_days: 0,
+        views_per_subscriber: 0,
       }
     }
 
-    return null
+    const sortedStats = dailyStats.sort((a, b) => new Date(a.stat_date).getTime() - new Date(b.stat_date).getTime())
+    
+    const latestStats = sortedStats[sortedStats.length - 1]
+    const stats30DaysAgo = sortedStats[Math.max(0, sortedStats.length - 30)]
+    const stats7DaysAgo = sortedStats[Math.max(0, sortedStats.length - 7)]
+    const stats3DaysAgo = sortedStats[Math.max(0, sortedStats.length - 3)]
+
+    const views30Days = latestStats && stats30DaysAgo ? latestStats.views - stats30DaysAgo.views : 0
+    const views7Days = latestStats && stats7DaysAgo ? latestStats.views - stats7DaysAgo.views : 0
+    const views3Days = latestStats && stats3DaysAgo ? latestStats.views - stats3DaysAgo.views : 0
+
+    const stats60DaysAgo = sortedStats[Math.max(0, sortedStats.length - 60)]
+    const stats14DaysAgo = sortedStats[Math.max(0, sortedStats.length - 14)]
+    const stats6DaysAgo = sortedStats[Math.max(0, sortedStats.length - 6)]
+
+    const prevViews30Days = stats30DaysAgo && stats60DaysAgo ? stats30DaysAgo.views - stats60DaysAgo.views : 0
+    const prevViews7Days = stats7DaysAgo && stats14DaysAgo ? stats7DaysAgo.views - stats14DaysAgo.views : 0
+    const prevViews3Days = stats3DaysAgo && stats6DaysAgo ? stats3DaysAgo.views - stats6DaysAgo.views : 0
+
+    const delta30Days = prevViews30Days > 0 ? ((views30Days - prevViews30Days) / prevViews30Days) * 100 : 0
+    const delta7Days = prevViews7Days > 0 ? ((views7Days - prevViews7Days) / prevViews7Days) * 100 : 0
+    const delta3Days = prevViews3Days > 0 ? ((views3Days - prevViews3Days) / prevViews3Days) * 100 : 0
+
+    // Removed uploads_last_30_days calculation - was incorrectly assuming upload rate based on channel age
+
+    const currentSubscribers = statistics?.total_subscribers || 0
+    const viewsPerSubscriber = currentSubscribers > 0 ? views30Days / currentSubscribers : 0
+
+    // Removed all assumption-based calculations:
+    // - videos_until_takeoff: based on assumed upload rate
+    // - days_until_takeoff: based on assumed "takeoff point" algorithm
+    // - days_creation_to_first_upload: hardcoded to 30 days
+
+    return {
+      views_last_30_days: views30Days,
+      views_last_7_days: views7Days,
+      views_last_3_days: views3Days,
+      views_delta_30_days: delta30Days,
+      views_delta_7_days: delta7Days,
+      views_delta_3_days: delta3Days,
+      views_per_subscriber: viewsPerSubscriber,
+    }
   }
 
-  async getChannelsWithTakeoff(): Promise<string[]> {
-    const channels = await this.getAllChannels()
-    const takenOffChannels: string[] = []
-
-    for (const channel of channels) {
-      const dailyStats = await this.getChannelDailyStats(channel.channel_id, 365)
-      const takeoffPoint = this.findTakeoffPoint(dailyStats)
-
-      if (takeoffPoint) {
-        takenOffChannels.push(channel.channel_id)
-      }
-    }
-
-    return takenOffChannels
-  }
+  // Removed findTakeoffPoint and getChannelsWithTakeoff functions
+  // These were making assumptions about "takeoff" without reliable data from SocialBlade
 
   async addChannel(channel: Channel): Promise<void> {
     const supabase = await this.getSupabaseClient()

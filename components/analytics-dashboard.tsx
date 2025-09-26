@@ -139,6 +139,9 @@ export function AnalyticsDashboard() {
               <SelectItem value="3">Last 3 days</SelectItem>
               <SelectItem value="7">Last 7 days</SelectItem>
               <SelectItem value="30">Last 30 days</SelectItem>
+              <SelectItem value="180">Last 6 months</SelectItem>
+              <SelectItem value="365">Last 1 year</SelectItem>
+              <SelectItem value="1095">Last 3 years</SelectItem>
             </SelectContent>
           </Select>
         </div>

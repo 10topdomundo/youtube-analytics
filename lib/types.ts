@@ -185,7 +185,7 @@ export interface SocialBladeResponse {
   }
 }
 
-export type TimePeriod = 3 | 7 | 30
+export type TimePeriod = 3 | 7 | 30 | 180 | 365 | 1095
 
 export interface NicheAnalytics {
   niche: string
@@ -215,10 +215,11 @@ export interface ChannelCalculatedMetrics {
   views_delta_7_days: number
   views_delta_3_days: number
   views_per_subscriber: number
-  uploads_last_30_days: number
-  videos_until_takeoff?: number
-  days_until_takeoff?: number
-  days_creation_to_first_upload?: number
+  // Removed assumption-based fields:
+  // uploads_last_30_days: calculated incorrectly by dividing total uploads by channel age
+  // videos_until_takeoff: based on assumed upload rate
+  // days_until_takeoff: based on assumed "takeoff point" algorithm  
+  // days_creation_to_first_upload: hardcoded to 30 days
 }
 
 export interface ChannelWithMetrics extends Channel {

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Save, Download, BarChart3 } from "lucide-react"
+import { Plus, Save, Download, BarChart3, ExternalLink, Calendar } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Checkbox } from "@/components/ui/checkbox"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { ChartBuilder } from "./chart-builder"
 
 interface ChannelTableData {
@@ -24,10 +25,11 @@ interface ChannelTableData {
   views_delta_7_days: string
   views_delta_3_days: string
   views_per_subscriber: number
-  uploads_last_30d: number
-  videos_until_takeoff: number
-  days_until_takeoff: number
-  days_creation_to_first_upload: number
+  // Removed assumption-based fields that were incorrectly calculated:
+  // uploads_last_30d: based on incorrect assumptions about upload frequency
+  // videos_until_takeoff: based on assumed "takeoff point" 
+  // days_until_takeoff: based on assumed "takeoff point"
+  // days_creation_to_first_upload: hardcoded to 30 days
   sub_niche: string
   channel_type: string
   channel_creation: string
@@ -54,10 +56,6 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
     "views_delta_7_days",
     "views_delta_3_days",
     "views_per_subscriber",
-    "uploads_last_30d",
-    "videos_until_takeoff",
-    "days_until_takeoff",
-    "days_creation_to_first_upload",
     "sub_niche",
     "channel_type",
     "channel_creation",
@@ -72,22 +70,21 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
   const [newColumnName, setNewColumnName] = useState("")
   const [isLoading, setIsLoading] = useState(true)
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null)
-  const [showTakeoffFilter, setShowTakeoffFilter] = useState(false)
-  const [takenOffChannels, setTakenOffChannels] = useState<string[]>([])
+  // Removed takeoff filter functionality - was based on incorrect assumptions
+  const [timePeriod, setTimePeriod] = useState<string>("30")
 
   useEffect(() => {
     loadChannelData()
-    loadTakeoffChannels()
-  }, [])
+  }, [timePeriod])
 
   useEffect(() => {
     applyFilters()
-  }, [data, showTakeoffFilter, takenOffChannels])
+  }, [data])
 
   const loadChannelData = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch("/api/channels/table-data")
+      const response = await fetch(`/api/channels/table-data?period=${timePeriod}`)
       if (!response.ok) {
         throw new Error("Failed to fetch channel data")
       }
@@ -100,26 +97,11 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
     }
   }
 
-  const loadTakeoffChannels = async () => {
-    try {
-      const response = await fetch("/api/channels/takeoff")
-      if (response.ok) {
-        const channels = await response.json()
-        setTakenOffChannels(channels)
-      }
-    } catch (error) {
-      console.error("Failed to load takeoff channels:", error)
-    }
-  }
+  // Removed loadTakeoffChannels function - was based on incorrect assumptions
 
   const applyFilters = () => {
-    let filtered = [...data]
-
-    if (showTakeoffFilter) {
-      filtered = filtered.filter((channel) => takenOffChannels.includes(channel.channel_id))
-    }
-
-    setFilteredData(filtered)
+    // Just copy all data since we removed takeoff filtering
+    setFilteredData([...data])
   }
 
   const addColumn = () => {
@@ -181,10 +163,6 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
       "views_delta_7_days": "Views Δ% 7 days",
       "views_delta_3_days": "Views Δ% 3 days",
       "views_per_subscriber": "Views per subscriber",
-      "uploads_last_30d": "Uploads (Last 30d)",
-      "videos_until_takeoff": "Videos until takeoff",
-      "days_until_takeoff": "Days Until Takeoff",
-      "days_creation_to_first_upload": "Days Creation → First Upload",
       "sub_niche": "Sub-niche",
       "channel_type": "Channel type",
       "channel_creation": "Channel creation",
@@ -211,10 +189,6 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
       "views_delta_7_days",
       "views_delta_3_days",
       "views_per_subscriber",
-      "uploads_last_30d",
-      "videos_until_takeoff",
-      "days_until_takeoff", 
-      "days_creation_to_first_upload",
       "channel_creation",
       "channel_id",
       "total_subscribers",
@@ -285,19 +259,7 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
       )
     }
     
-    // Format other numeric fields that should be empty when zero
-    if ((column === "uploads_last_30d" || column === "videos_until_takeoff" || 
-         column === "days_until_takeoff" || column === "days_creation_to_first_upload") && 
-        typeof value === "number") {
-      if (value === 0) {
-        return <span className="p-1 font-mono text-xs text-muted-foreground">—</span>
-      }
-      return (
-        <span className="p-1 font-mono text-xs">
-          {value.toLocaleString()}
-        </span>
-      )
-    }
+    // Removed formatting for assumption-based fields that have been removed
 
     if (column === "status") {
       return (
@@ -308,6 +270,24 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
         >
           {value || "Unknown"}
         </Badge>
+      )
+    }
+
+    // Make channel name clickable
+    if (column === "channel_name") {
+      return (
+        <div className="flex items-center gap-2">
+          <a 
+            href={`https://youtube.com/channel/${row.channel_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:text-primary/80 transition-colors underline cursor-pointer p-1 rounded min-h-[20px] text-xs"
+            title="Open YouTube channel"
+          >
+            {value || ""}
+          </a>
+          <ExternalLink className="w-3 h-3 text-muted-foreground" />
+        </div>
       )
     }
 
@@ -353,16 +333,7 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
 
         {isAdmin && (
           <div className="flex items-center gap-2">
-            <div className="flex items-center space-x-2 mr-4">
-              <Checkbox
-                id="takeoff-filter"
-                checked={showTakeoffFilter}
-                onCheckedChange={(checked) => setShowTakeoffFilter(checked as boolean)}
-              />
-              <Label htmlFor="takeoff-filter" className="text-sm">
-                Show only channels that took off
-              </Label>
-            </div>
+            {/* Removed takeoff filter - was based on incorrect assumptions */}
 
             <Dialog>
               <DialogTrigger asChild>
@@ -402,16 +373,7 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
 
         {!isAdmin && (
           <div className="flex items-center gap-2">
-            <div className="flex items-center space-x-2 mr-4">
-              <Checkbox
-                id="takeoff-filter"
-                checked={showTakeoffFilter}
-                onCheckedChange={(checked) => setShowTakeoffFilter(checked as boolean)}
-              />
-              <Label htmlFor="takeoff-filter" className="text-sm">
-                Show only channels that took off
-              </Label>
-            </div>
+            {/* Removed takeoff filter - was based on incorrect assumptions */}
 
             <Button onClick={exportData} variant="outline" size="sm">
               <Download className="w-4 h-4 mr-2" />
@@ -423,18 +385,34 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
 
       <Card>
         <CardHeader>
-          <CardTitle>Channel Data Analysis</CardTitle>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <CardTitle>Channel Data Analysis</CardTitle>
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-muted-foreground" />
+              <Select
+                value={timePeriod}
+                onValueChange={setTimePeriod}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="3">Last 3 days</SelectItem>
+                  <SelectItem value="7">Last 7 days</SelectItem>
+                  <SelectItem value="30">Last 30 days</SelectItem>
+                  <SelectItem value="180">Last 6 months</SelectItem>
+                  <SelectItem value="365">Last 1 year</SelectItem>
+                  <SelectItem value="1095">Last 3 years</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="table" className="w-full">
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="table">
                 Data Table ({filteredData.length} channels)
-                {showTakeoffFilter && (
-                  <Badge variant="secondary" className="ml-2">
-                    Filtered
-                  </Badge>
-                )}
               </TabsTrigger>
               <TabsTrigger value="charts">
                 <BarChart3 className="w-4 h-4 mr-2" />

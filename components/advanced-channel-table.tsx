@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { ArrowUpDown, ArrowUp, ArrowDown, Search, Filter, Download, Trash2, Plus, Eye, Calendar, Users, Play, TrendingUp } from "lucide-react"
+import { ArrowUpDown, ArrowUp, ArrowDown, Search, Filter, Download, Trash2, Plus, Eye, Calendar, Users, Play, TrendingUp, ExternalLink } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -29,10 +29,7 @@ interface ChannelTableData {
   views_delta_7d?: number
   views_delta_3d?: number
   views_per_subscriber?: number
-  uploads_last_30d?: number
-  videos_until_takeoff?: number
-  days_until_takeoff?: number
-  days_creation_to_first_upload?: number
+  // Removed assumption-based fields that were incorrectly calculated
   channel_created_date?: string
   creation_year?: number
   age_classification?: string
@@ -404,7 +401,6 @@ export function AdvancedChannelTable({
                     <SelectItem value="__all__">All ages</SelectItem>
                     <SelectItem value="fresh">Fresh (2020+)</SelectItem>
                     <SelectItem value="aged">Aged (2006-2019)</SelectItem>
-                    <SelectItem value="vintage">Vintage (Pre-2006)</SelectItem>
                     <SelectItem value="unknown">Unknown</SelectItem>
                   </SelectContent>
                 </Select>
@@ -517,7 +513,18 @@ export function AdvancedChannelTable({
                   </TableCell>
                   <TableCell>
                     <div>
-                      <div className="font-medium">{channel.channel_name}</div>
+                      <div className="font-medium flex items-center gap-2">
+                        {channel.channel_name}
+                        <a 
+                          href={`https://youtube.com/channel/${channel.channel_id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-primary transition-colors"
+                          title="Open YouTube channel"
+                        >
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      </div>
                       <div className="text-sm text-muted-foreground">
                         {channel.creation_year && `Created ${channel.creation_year}`}
                       </div>

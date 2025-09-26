@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Folder, Plus, Edit2, Trash2, FolderOpen, Search, Filter, ExternalLink } from "lucide-react"
+import { Folder, Plus, Edit2, Trash2, FolderOpen, Search, Filter, ExternalLink, Users, TrendingUp, Calendar, Eye } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -103,8 +103,6 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
             ageClassification = "fresh"
           } else if (creationYear >= 2006) {
             ageClassification = "aged"
-          } else {
-            ageClassification = "vintage"
           }
         }
         
@@ -171,7 +169,7 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
       // Count by age
       if (channel.age_classification === "fresh") {
         folder.freshCount++
-      } else if (channel.age_classification === "aged" || channel.age_classification === "vintage") {
+      } else if (channel.age_classification === "aged") {
         folder.agedCount++
       }
     })
@@ -278,7 +276,10 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
     return filtered
   }
 
-  const formatNumber = (num: number) => {
+  const formatNumber = (num: number | undefined | null) => {
+    if (typeof num !== 'number' || isNaN(num) || num === null || num === undefined) {
+      return "0"
+    }
     if (num >= 1000000) {
       return (num / 1000000).toFixed(1) + "M"
     } else if (num >= 1000) {
@@ -617,11 +618,11 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <div className="w-2 h-2 bg-green-500 rounded-full" />
-                      Fresh: {selectedFolderData.freshPercent.toFixed(1)}%
+                      Fresh: {selectedFolderData.count > 0 ? ((selectedFolderData.freshCount / selectedFolderData.count) * 100).toFixed(1) : '0.0'}%
                     </span>
                     <span className="flex items-center gap-1">
                       <div className="w-2 h-2 bg-orange-500 rounded-full" />
-                      Aged: {selectedFolderData.agedPercent.toFixed(1)}%
+                      Aged: {selectedFolderData.count > 0 ? ((selectedFolderData.agedCount / selectedFolderData.count) * 100).toFixed(1) : '0.0'}%
                     </span>
                   </div>
                 </div>
