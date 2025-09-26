@@ -315,10 +315,7 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Days to First Upload</span>
-                        <span className="font-semibold text-foreground">{takeoffData.daysToFirstUpload} days</span>
-                      </div>
+                      {/* Removed "Days to First Upload" - this data is not available from the API and was hardcoded */}
                       <div className="flex justify-between items-center">
                         <span className="text-sm text-muted-foreground">Days to Takeoff</span>
                         <span className="font-semibold text-foreground">{takeoffData.daysToTakeoff} days</span>

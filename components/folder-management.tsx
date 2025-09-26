@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Folder, Plus, Edit2, Trash2, FolderOpen, Search, Filter, ExternalLink, Users, TrendingUp, Calendar, Eye } from "lucide-react"
+import { Folder, Plus, Edit2, Trash2, FolderOpen, Search, Filter, ExternalLink, Users, TrendingUp, Calendar, Eye, BarChart3, PieChart } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Label } from "@/components/ui/label"
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts"
 
 interface Channel {
   id: string
@@ -23,6 +24,7 @@ interface Channel {
   channel_created_date?: string
   creation_year?: number
   age_classification?: string
+  channel_country?: string
 }
 
 interface FolderStats {
@@ -36,6 +38,38 @@ interface FolderStats {
 
 interface FolderManagementProps {
   isAdmin?: boolean
+}
+
+interface ChartData {
+  name: string
+  value: number
+  color?: string
+  [key: string]: any // Add index signature for Recharts compatibility
+}
+
+interface ChannelTableData {
+  id: string
+  channel_id: string
+  channel_name: string
+  niche: string
+  language: string
+  views_last_30_days: number
+  views_delta_30_days: string
+  views_delta_7_days: string
+  views_delta_3_days: string
+  views_per_subscriber: number
+  sub_niche: string
+  channel_type: string
+  channel_creation: string
+  thumbnail_style: string
+  video_style: string
+  video_length: string
+  status: string
+  notes: string
+  total_subscribers: number
+  total_views: number
+  total_uploads: number
+  [key: string]: any
 }
 
 const PREDEFINED_NICHES = [
@@ -72,6 +106,14 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [selectedChannels, setSelectedChannels] = useState<Set<string>>(new Set())
   const [isMovingChannels, setIsMovingChannels] = useState(false)
+  
+  // Chart-related state
+  const [showChartCreator, setShowChartCreator] = useState(false)
+  const [selectedMetric, setSelectedMetric] = useState<string>("")
+  const [chartType, setChartType] = useState<"pie" | "bar">("pie")
+  const [chartData, setChartData] = useState<ChartData[]>([])
+  const [folderTableData, setFolderTableData] = useState<ChannelTableData[]>([])
+  const [isLoadingChartData, setIsLoadingChartData] = useState(false)
 
   useEffect(() => {
     loadChannels()
@@ -287,6 +329,157 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
     }
     return num.toString()
   }
+
+  // Removed redundant loadFolderTableData function - logic moved to handleCreateChart
+
+  // Generate chart data based on selected metric
+  const generateChartData = (metric: string, data: ChannelTableData[]): ChartData[] => {
+    if (!data.length) return []
+
+    // Define colors for different chart segments
+    const colors = ["#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#f97316", "#84cc16"]
+
+    switch (metric) {
+      case "video_length":
+      case "video_style":
+      case "thumbnail_style":
+      case "channel_type":
+      case "language":
+      case "status":
+        // Categorical data - group by value and count
+        const categoryCount = data.reduce((acc, channel) => {
+          const value = channel[metric] || "Unknown"
+          acc[value] = (acc[value] || 0) + 1
+          return acc
+        }, {} as Record<string, number>)
+        
+        return Object.entries(categoryCount).map(([name, value], index) => ({
+          name,
+          value,
+          color: colors[index % colors.length]
+        }))
+
+      case "total_subscribers":
+      case "total_views":
+      case "total_uploads":
+      case "views_last_30_days":
+      case "views_per_subscriber":
+        // Numerical data - create ranges or individual values for small datasets
+        const values = data.map(channel => Number(channel[metric]) || 0).filter(v => v > 0)
+        if (values.length === 0) return []
+
+        // For small datasets (<=5 channels), show individual values
+        if (values.length <= 5) {
+          return data.map((channel, index) => ({
+            name: channel.channel_name,
+            value: Number(channel[metric]) || 0,
+            color: colors[index % colors.length]
+          })).filter(item => item.value > 0)
+        }
+
+        // For larger datasets, create ranges
+        values.sort((a, b) => a - b)
+        const min = values[0]
+        const max = values[values.length - 1]
+        
+        // Avoid division by zero for identical values
+        if (min === max) {
+          return [{
+            name: formatNumber(min),
+            value: values.length,
+            color: colors[0]
+          }]
+        }
+        
+        const range = (max - min) / 5 // Create 5 buckets
+
+        const buckets = [
+          { name: `${formatNumber(min)} - ${formatNumber(min + range)}`, count: 0 },
+          { name: `${formatNumber(min + range)} - ${formatNumber(min + 2 * range)}`, count: 0 },
+          { name: `${formatNumber(min + 2 * range)} - ${formatNumber(min + 3 * range)}`, count: 0 },
+          { name: `${formatNumber(min + 3 * range)} - ${formatNumber(min + 4 * range)}`, count: 0 },
+          { name: `${formatNumber(min + 4 * range)}+`, count: 0 }
+        ]
+
+        values.forEach(value => {
+          const bucketIndex = Math.min(Math.floor((value - min) / range), 4)
+          buckets[bucketIndex].count++
+        })
+
+        return buckets.map((bucket, index) => ({
+          name: bucket.name,
+          value: bucket.count,
+          color: colors[index % colors.length]
+        })).filter(item => item.value > 0)
+
+      default:
+        return []
+    }
+  }
+
+  // Handle metric selection and chart generation
+  const handleCreateChart = async () => {
+    if (!selectedMetric || !selectedFolder) return
+
+    setIsLoadingChartData(true)
+    try {
+      const response = await fetch("/api/channels/table-data")
+      if (!response.ok) {
+        throw new Error("Failed to fetch table data")
+      }
+      const allData: ChannelTableData[] = await response.json()
+      
+      console.log("All data received:", allData.length, "channels")
+      console.log("Selected folder:", selectedFolder)
+      console.log("Available niches in data:", [...new Set(allData.map(c => c.niche))])
+      
+      // Filter data for channels in this folder
+      let folderData = allData.filter(channel => channel.niche === selectedFolder)
+      
+      // If no exact match found, try case-insensitive or partial match
+      if (folderData.length === 0) {
+        folderData = allData.filter(channel => 
+          channel.niche?.toLowerCase().includes(selectedFolder.toLowerCase()) ||
+          selectedFolder.toLowerCase().includes(channel.niche?.toLowerCase() || '')
+        )
+      }
+      
+      // If still no match, show all channels for debugging
+      if (folderData.length === 0) {
+        console.warn("No channels found for folder:", selectedFolder, "Showing all channels for debugging")
+        folderData = allData
+      }
+      
+      console.log("Filtered folder data:", folderData.length, "channels")
+      console.log("Folder data sample:", folderData.slice(0, 2))
+      
+      setFolderTableData(folderData)
+      
+      // Generate chart data
+      const data = generateChartData(selectedMetric, folderData)
+      console.log("Generated chart data:", data)
+      setChartData(data)
+    } catch (error) {
+      console.error("Failed to load folder table data:", error)
+    } finally {
+      setIsLoadingChartData(false)
+    }
+  }
+
+  // Available metrics for chart creation
+  const availableMetrics = [
+    { value: "video_length", label: "Video Length" },
+    { value: "video_style", label: "Video Style" },
+    { value: "thumbnail_style", label: "Thumbnail Style" },
+    { value: "channel_type", label: "Channel Type" },
+    { value: "language", label: "Language" },
+    { value: "status", label: "Status" },
+    { value: "total_subscribers", label: "Total Subscribers" },
+    { value: "total_views", label: "Total Views" },
+    { value: "total_uploads", label: "Total Uploads" },
+    { value: "views_last_30_days", label: "Views Last 30 Days" },
+    { value: "views_per_subscriber", label: "Views per Subscriber" }
+  ]
 
   const processedFolders = filterFolders(sortFolders(folders))
   const selectedFolderData = folders.find(f => f.name === selectedFolder)
@@ -521,7 +714,14 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
 
       {/* Enhanced Folder Detail Dialog */}
       <Dialog open={!!selectedFolder} onOpenChange={() => setSelectedFolder(null)}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-hidden">
+        <DialogContent 
+          className="w-[25vw] max-w-none h-[50vh] max-h-none overflow-hidden !w-[25vw] !max-w-none" 
+          style={{ 
+            width: '25vw !important', 
+            maxWidth: 'none !important',
+            minWidth: '25vw'
+          }}
+        >
           <DialogHeader className="pb-4 border-b">
             <div className="flex items-center justify-between">
               <DialogTitle className="flex items-center gap-3">
@@ -548,7 +748,16 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
           </DialogHeader>
           
           {selectedFolderData && (
-            <div className="space-y-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+            <Tabs defaultValue="overview" className="flex-1 overflow-hidden">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="overview">Overview</TabsTrigger>
+                <TabsTrigger value="charts">
+                  <BarChart3 className="w-4 h-4 mr-2" />
+                  Charts
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="overview" className="space-y-6 overflow-y-auto max-h-[calc(95vh-200px)]">
               {/* Folder Stats Summary */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
@@ -712,7 +921,159 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
                   </div>
                 )}
               </div>
-            </div>
+              </TabsContent>
+
+              {/* Charts Tab */}
+              <TabsContent value="charts" className="space-y-6 overflow-y-auto max-h-[calc(95vh-200px)]">
+                <div className="space-y-6">
+                  {/* Chart Creation Controls */}
+                  <div className="bg-muted/30 p-6 rounded-lg border">
+                    <h4 className="font-semibold mb-4 flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-primary" />
+                      Create Chart from Folder Data
+                    </h4>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="metric-select">Select Metric</Label>
+                        <Select value={selectedMetric} onValueChange={setSelectedMetric}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choose a metric..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableMetrics.map((metric) => (
+                              <SelectItem key={metric.value} value={metric.value}>
+                                {metric.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="chart-type">Chart Type</Label>
+                        <Select value={chartType} onValueChange={(value: "pie" | "bar") => setChartType(value)}>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="pie">
+                              <div className="flex items-center gap-2">
+                                <PieChart className="w-4 h-4" />
+                                Pie Chart
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="bar">
+                              <div className="flex items-center gap-2">
+                                <BarChart3 className="w-4 h-4" />
+                                Bar Chart
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label>&nbsp;</Label>
+                        <Button 
+                          onClick={handleCreateChart} 
+                          disabled={!selectedMetric || isLoadingChartData}
+                          className="w-full"
+                        >
+                          {isLoadingChartData ? "Loading..." : "Generate Chart"}
+                        </Button>
+                      </div>
+                    </div>
+
+                    {selectedMetric && (
+                      <p className="text-sm text-muted-foreground">
+                        This will create a {chartType} chart showing the distribution of {availableMetrics.find(m => m.value === selectedMetric)?.label.toLowerCase()} across all channels in the "{selectedFolder}" folder.
+                      </p>
+                    )}
+                  </div>
+
+                  {/* Chart Display */}
+                  {chartData.length > 0 && (
+                    <div className="bg-background p-6 rounded-lg border">
+                      <h4 className="font-semibold mb-4 text-center">
+                        {availableMetrics.find(m => m.value === selectedMetric)?.label} Distribution - {selectedFolder}
+                      </h4>
+                      
+                      <div className="h-96">
+                        <ResponsiveContainer width="100%" height="100%">
+                          {chartType === "pie" ? (
+                            <RechartsPieChart>
+                              <Pie 
+                                data={chartData} 
+                                cx="50%" 
+                                cy="50%" 
+                                innerRadius={60} 
+                                outerRadius={120} 
+                                paddingAngle={2}
+                                dataKey="value"
+                                nameKey="name"
+                              >
+                                {chartData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(value, name) => [value, name]} />
+                              <Legend />
+                            </RechartsPieChart>
+                          ) : (
+                            <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" />
+                              <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                              <YAxis />
+                              <Tooltip />
+                              <Bar dataKey="value" fill="#8884d8">
+                                {chartData.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.color} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          )}
+                        </ResponsiveContainer>
+                      </div>
+
+                      {/* Chart Data Summary */}
+                      <div className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {chartData.slice(0, 4).map((item, index) => (
+                          <div key={index} className="text-center p-3 bg-muted/30 rounded-lg">
+                            <div className="flex items-center justify-center gap-2 mb-1">
+                              <div 
+                                className="w-3 h-3 rounded-full" 
+                                style={{ backgroundColor: item.color }}
+                              />
+                              <span className="font-semibold">{item.value}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate">{item.name}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {chartData.length === 0 && selectedMetric && !isLoadingChartData && (
+                    <div className="text-center py-12 bg-muted/30 rounded-lg border-2 border-dashed border-muted-foreground/20">
+                      <BarChart3 className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
+                      <p className="text-muted-foreground font-medium">No chart data available</p>
+                      <p className="text-sm text-muted-foreground/70 mt-1">
+                        {folderTableData.length === 0 
+                          ? `No channels found in folder "${selectedFolder}". Check the browser console for debugging info.`
+                          : `No data available for metric "${availableMetrics.find(m => m.value === selectedMetric)?.label}". Try a different metric.`
+                        }
+                      </p>
+                      {folderTableData.length > 0 && (
+                        <p className="text-xs text-muted-foreground/60 mt-2">
+                          Found {folderTableData.length} channels in this folder
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
           )}
         </DialogContent>
       </Dialog>
