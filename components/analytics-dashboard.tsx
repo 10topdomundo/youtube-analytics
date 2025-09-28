@@ -258,11 +258,11 @@ export function AnalyticsDashboard() {
                       <div className="flex items-center gap-4">
                         <div>
                           <p className="text-sm text-muted-foreground">Subscribers</p>
-                          <p className="font-semibold">{formatNumber(insight.statistics.subscribers)}</p>
+                          <p className="font-semibold">{formatNumber(insight.statistics.total_subscribers)}</p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">Views</p>
-                          <p className="font-semibold">{formatNumber(insight.statistics.views)}</p>
+                          <p className="font-semibold">{formatNumber(insight.statistics.total_views)}</p>
                         </div>
                         <div>
                           <p className="text-sm text-muted-foreground">Growth</p>
