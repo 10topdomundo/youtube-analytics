@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS channels (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Create channel_statistics table for snapshot totals
+-- Create channel_statistics table for snapshot total
 CREATE TABLE IF NOT EXISTS channel_statistics (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   channel_id UUID REFERENCES channels(id) ON DELETE CASCADE,
