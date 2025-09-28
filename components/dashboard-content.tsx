@@ -16,12 +16,13 @@ import type { UserProfile } from "@/lib/auth"
 interface DashboardContentProps {
   user: User
   profile: UserProfile | null
+  hideHeader?: boolean
 }
 
-export function DashboardContent({ user, profile }: DashboardContentProps) {
+export function DashboardContent({ user, profile, hideHeader = false }: DashboardContentProps) {
   return (
     <div className="min-h-screen bg-background">
-      <DashboardHeader user={user} profile={profile} />
+      {!hideHeader && <DashboardHeader user={user} profile={profile} />}
 
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
@@ -34,7 +35,7 @@ export function DashboardContent({ user, profile }: DashboardContentProps) {
 
         {/* Main Navigation */}
         <Tabs defaultValue="dashboard" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-7">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8">
             <TabsTrigger value="dashboard" className="flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />
               <span className="hidden sm:inline">Dashboard</span>

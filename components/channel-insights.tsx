@@ -1,11 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { TrendingUp, TrendingDown, Users, Eye, Video, Target, Clock } from "lucide-react"
+import { TrendingUp, TrendingDown, Users, Eye, Video, Target, Clock, BarChart3, PieChart } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
+import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
 import type { TimePeriod, ChannelAnalytics } from "@/lib/types"
 
 interface ChannelInsightsProps {
@@ -20,6 +23,13 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
   const [performanceMetrics, setPerformanceMetrics] = useState<any>(null)
   const [takeoffData, setTakeoffData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Group analysis state
+  const [groupAnalysisData, setGroupAnalysisData] = useState<any[]>([])
+  const [selectedGroupBy, setSelectedGroupBy] = useState<string>("")
+  const [selectedGroupMetric, setSelectedGroupMetric] = useState<string>("")
+  const [groupChartData, setGroupChartData] = useState<any[]>([])
+  const [isLoadingGroupData, setIsLoadingGroupData] = useState(false)
 
   useEffect(() => {
     loadChannels()
@@ -87,6 +97,89 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
     const sign = percent >= 0 ? "+" : ""
     return `${sign}${percent.toFixed(1)}%`
   }
+
+  // Group analysis functions
+  const loadGroupAnalysisData = async () => {
+    setIsLoadingGroupData(true)
+    try {
+      const response = await fetch("/api/channels/table-data")
+      if (!response.ok) throw new Error("Failed to fetch group analysis data")
+      const data = await response.json()
+      setGroupAnalysisData(data)
+      return data // Return the data for immediate use
+    } catch (error) {
+      console.error("Failed to load group analysis data:", error)
+      return []
+    } finally {
+      setIsLoadingGroupData(false)
+    }
+  }
+
+  const generateGroupChart = (data?: any[]) => {
+    const dataToUse = data || groupAnalysisData
+    if (!selectedGroupBy || !selectedGroupMetric || !dataToUse.length) {
+      console.log("Cannot generate chart:", { selectedGroupBy, selectedGroupMetric, dataLength: dataToUse.length })
+      return
+    }
+
+    const groupedData = dataToUse.reduce((acc, channel) => {
+      const groupKey = channel[selectedGroupBy] || "Unknown"
+      if (!acc[groupKey]) {
+        acc[groupKey] = []
+      }
+      acc[groupKey].push(channel)
+      return acc
+    }, {} as Record<string, any[]>)
+
+    // Sort entries by group name for consistent color assignment
+    const sortedEntries = Object.entries(groupedData).sort(([a], [b]) => a.localeCompare(b))
+    
+    const chartData = sortedEntries.map(([groupName, channels], index) => {
+      const colors = ["#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#06b6d4", "#ec4899", "#f97316", "#84cc16"]
+      
+      let value = 0
+      if (selectedGroupMetric === "count") {
+        value = (channels as any[]).length
+      } else {
+        // Calculate sum or average for numerical metrics
+        const values = (channels as any[]).map((ch: any) => Number(ch[selectedGroupMetric]) || 0)
+        value = selectedGroupMetric.includes("avg") || selectedGroupMetric.includes("per") 
+          ? values.reduce((sum: number, v: number) => sum + v, 0) / values.length
+          : values.reduce((sum: number, v: number) => sum + v, 0)
+      }
+
+      return {
+        name: groupName,
+        value: Math.round(value),
+        color: colors[index % colors.length]
+      }
+    }).filter(item => item.value > 0)
+
+    // Sort by value descending for better visual representation
+    chartData.sort((a, b) => b.value - a.value)
+    
+    console.log("Generated chart data:", chartData)
+    setGroupChartData(chartData)
+  }
+
+  // Available grouping options
+  const groupByOptions = [
+    { value: "niche", label: "Niche" },
+    { value: "thumbnail_style", label: "Thumbnail Style" },
+    { value: "video_style", label: "Video Style" },
+    { value: "channel_type", label: "Channel Type" },
+    { value: "video_length", label: "Video Length" },
+    { value: "language", label: "Language" }
+  ]
+
+  // Available metrics for group analysis
+  const groupMetricOptions = [
+    { value: "count", label: "Channel Count" },
+    { value: "total_subscribers", label: "Total Subscribers" },
+    { value: "total_views", label: "Total Views" },
+    { value: "views_last_30_days", label: "Views Last 30 Days" },
+    { value: "views_per_subscriber", label: "Avg Views per Subscriber" }
+  ]
 
   const getGrowthIcon = (percent: number) => {
     return percent >= 0 ? (
@@ -338,6 +431,122 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
               )}
             </div>
           )}
+
+          {/* Group Analysis Section */}
+          <div className="mt-8 space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5" />
+                  Group Analysis
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {/* Controls */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Group By</Label>
+                    <Select value={selectedGroupBy} onValueChange={setSelectedGroupBy}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select grouping..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {groupByOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Metric</Label>
+                    <Select value={selectedGroupMetric} onValueChange={setSelectedGroupMetric}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select metric..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {groupMetricOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>&nbsp;</Label>
+                    <Button 
+                      onClick={async () => {
+                        const data = await loadGroupAnalysisData()
+                        generateGroupChart(data)
+                      }}
+                      disabled={!selectedGroupBy || !selectedGroupMetric || isLoadingGroupData}
+                      className="w-full"
+                    >
+                      {isLoadingGroupData ? "Loading..." : "Generate Chart"}
+                    </Button>
+                  </div>
+                </div>
+
+                {/* Chart Display */}
+                {groupChartData.length > 0 && (
+                  <div className="bg-muted/30 p-6 rounded-lg">
+                    <h4 className="font-semibold mb-4 text-center">
+                      {groupMetricOptions.find(m => m.value === selectedGroupMetric)?.label} by {groupByOptions.find(g => g.value === selectedGroupBy)?.label}
+                    </h4>
+                    
+                    <div className="h-80">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <RechartsPieChart>
+                          <Pie
+                            data={groupChartData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={60}
+                            outerRadius={120}
+                            paddingAngle={2}
+                            dataKey="value"
+                            nameKey="name"
+                          >
+                            {groupChartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(value: any, name: any) => [formatNumber(Number(value)), name]} />
+                        </RechartsPieChart>
+                      </ResponsiveContainer>
+                    </div>
+
+                    {/* Chart Summary */}
+                    <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {groupChartData.slice(0, 4).map((item, index) => (
+                        <div key={index} className="text-center p-3 bg-background rounded-lg border">
+                          <div className="flex items-center justify-center gap-2 mb-1">
+                            <div 
+                              className="w-3 h-3 rounded-full" 
+                              style={{ backgroundColor: item.color }}
+                            />
+                            <span className="font-semibold">{formatNumber(item.value)}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground truncate">{item.name}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedGroupBy && selectedGroupMetric && groupChartData.length === 0 && !isLoadingGroupData && (
+                  <div className="text-center py-8 bg-muted/30 rounded-lg border-2 border-dashed border-muted-foreground/20">
+                    <PieChart className="w-12 h-12 text-muted-foreground/40 mx-auto mb-3" />
+                    <p className="text-muted-foreground">No data available for the selected grouping</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </>
       )}
 

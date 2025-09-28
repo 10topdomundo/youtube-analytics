@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Plus, Save, Download, BarChart3, ExternalLink, Calendar } from "lucide-react"
+import { Plus, Save, Download, BarChart3, ExternalLink, Calendar, FileSpreadsheet, CheckSquare, Square } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -72,6 +72,8 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null)
   // Removed takeoff filter functionality - was based on incorrect assumptions
   const [timePeriod, setTimePeriod] = useState<string>("30")
+  const [showColumnSelection, setShowColumnSelection] = useState(false)
+  const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set(columns))
 
   useEffect(() => {
     loadChannelData()
@@ -153,6 +155,42 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
     URL.revokeObjectURL(url)
   }
 
+  const exportSelectedColumnsToXLS = () => {
+    const selectedCols = Array.from(selectedColumns)
+    
+    // Create XLS content (tab-separated values with XLS mime type)
+    const header = selectedCols.join("\t")
+    const rows = data.map((row) => 
+      selectedCols.map((col) => {
+        const value = row[col] || ""
+        // Clean value for XLS format
+        return typeof value === 'string' ? value.replace(/[\t\n\r]/g, ' ') : value
+      }).join("\t")
+    ).join("\n")
+    
+    const xlsContent = header + "\n" + rows
+    
+    const blob = new Blob([xlsContent], { 
+      type: "application/vnd.ms-excel" 
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `channel-data-${selectedCols.length}-columns.xls`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const toggleColumnSelection = (column: string) => {
+    const newSelected = new Set(selectedColumns)
+    if (newSelected.has(column)) {
+      newSelected.delete(column)
+    } else {
+      newSelected.add(column)
+    }
+    setSelectedColumns(newSelected)
+  }
+
   const formatColumnName = (name: string) => {
     // Custom column name mappings to match the exact headers requested
     const customNames: Record<string, string> = {
@@ -198,7 +236,55 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
     
     const isReadOnly = readOnlyFields.has(column)
 
+    // Special handling for dropdown columns
     if (isEditing && isAdmin && !isReadOnly) {
+      if (column === "video_style") {
+        return (
+          <Select
+            value={value || ""}
+            onValueChange={(newValue) => {
+              updateCell(rowIndex, column, newValue)
+              setEditingCell(null)
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              <SelectItem value="b-rolls">b-rolls</SelectItem>
+              <SelectItem value="images">images</SelectItem>
+              <SelectItem value="image">image</SelectItem>
+            </SelectContent>
+          </Select>
+        )
+      }
+
+      if (column === "thumbnail_style") {
+        return (
+          <Select
+            value={value || ""}
+            onValueChange={(newValue) => {
+              updateCell(rowIndex, column, newValue)
+              setEditingCell(null)
+            }}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">None</SelectItem>
+              <SelectItem value="text + face, mix of colours">text + face, mix of colours</SelectItem>
+              <SelectItem value="text + face, clean colours">text + face, clean colours</SelectItem>
+              <SelectItem value="bg image + text">bg image + text</SelectItem>
+              <SelectItem value="face + place">face + place</SelectItem>
+              <SelectItem value="bright colorful image">bright colorful image</SelectItem>
+              <SelectItem value="historical real images">historical real images</SelectItem>
+            </SelectContent>
+          </Select>
+        )
+      }
+
       return (
         <Input
           value={value || ""}
@@ -364,6 +450,25 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
               Save
             </Button>
 
+            <Button 
+              onClick={() => setShowColumnSelection(!showColumnSelection)} 
+              variant="outline" 
+              size="sm"
+            >
+              <CheckSquare className="w-4 h-4 mr-2" />
+              Select Columns
+            </Button>
+            
+            <Button 
+              onClick={exportSelectedColumnsToXLS} 
+              variant="outline" 
+              size="sm"
+              disabled={selectedColumns.size === 0}
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Export XLS ({selectedColumns.size} cols)
+            </Button>
+
             <Button onClick={exportData} variant="outline" size="sm">
               <Download className="w-4 h-4 mr-2" />
               Export CSV
@@ -424,10 +529,34 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
               <div className="overflow-x-auto">
                 <Table>
                   <TableHeader>
+                    {showColumnSelection && (
+                      <TableRow className="bg-muted/50">
+                        {columns.map((column) => (
+                          <TableHead key={`select-${column}`} className="min-w-[120px] text-center">
+                            <Checkbox
+                              checked={selectedColumns.has(column)}
+                              onCheckedChange={() => toggleColumnSelection(column)}
+                              className="mx-auto"
+                            />
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    )}
                     <TableRow>
                       {columns.map((column) => (
                         <TableHead key={column} className="min-w-[120px] text-xs">
-                          {formatColumnName(column)}
+                          <div className="flex items-center justify-between">
+                            {formatColumnName(column)}
+                            {showColumnSelection && (
+                              <div className="ml-2">
+                                {selectedColumns.has(column) ? (
+                                  <CheckSquare className="w-3 h-3 text-primary" />
+                                ) : (
+                                  <Square className="w-3 h-3 text-muted-foreground" />
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </TableHead>
                       ))}
                     </TableRow>

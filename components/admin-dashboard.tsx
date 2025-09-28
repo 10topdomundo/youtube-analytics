@@ -62,12 +62,12 @@ export function AdminDashboard({ user, profile }: AdminDashboardProps) {
           <TabsContent value="channels">
             <div className="space-y-6">
               <h2 className="text-2xl font-bold">Channel Data Management</h2>
-              <DashboardContent user={user} profile={profile} />
+              <DashboardContent user={user} profile={profile} hideHeader={true} />
             </div>
           </TabsContent>
 
           <TabsContent value="dashboard">
-            <DashboardContent user={user} profile={profile} />
+            <DashboardContent user={user} profile={profile} hideHeader={true} />
           </TabsContent>
         </Tabs>
       </div>

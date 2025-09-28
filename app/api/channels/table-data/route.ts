@@ -33,16 +33,28 @@ export async function GET() {
       })
     }
 
-    const tableData = channels.map((channel) => ({
-      // Core identification
-      channel_id: channel.channel_id,
-      channel_name: channel.channel_name,
-      
-      // Categorization (editable)
-      niche: channel.channel_niche || "",
-      sub_niche: channel.sub_niche || "",
-      channel_type: channel.channel_type || "",
-      language: channel.channel_language || "",
+    const tableData = channels.map((channel) => {
+      // Calculate age classification based on creation date
+      let ageClassification = "unknown"
+      if (channel.channel_created_date) {
+        const creationYear = new Date(channel.channel_created_date).getFullYear()
+        if (creationYear >= 2020) {
+          ageClassification = "fresh"
+        } else if (creationYear >= 2006) {
+          ageClassification = "aged"
+        }
+      }
+
+      return {
+        // Core identification
+        channel_id: channel.channel_id,
+        channel_name: channel.channel_name,
+        
+        // Categorization (editable)
+        niche: channel.channel_niche || "",
+        sub_niche: channel.sub_niche || "",
+        channel_type: ageClassification, // Auto-populated based on creation date
+        language: channel.channel_language || "",
       
       // Statistics (from database)
       total_subscribers: channel.statistics?.total_subscribers || 0,
@@ -74,8 +86,9 @@ export async function GET() {
       id: channel.id,
       
       // Include custom fields if they exist
-      ...(channel.custom_fields || {}),
-    }))
+      ...(channel.custom_fields || {})
+    }
+    })
 
     console.log("Table data sample:", tableData.length > 0 ? {
       id: tableData[0].id,
