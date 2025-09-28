@@ -78,7 +78,7 @@ export interface ChannelAnalytics {
   dailyStats: ChannelDailyStats[]
   socialLinks: ChannelSocialLinks[]
   growth: {
-    period: 3 | 7 | 30
+    period: TimePeriod
     subscribersChange: number
     subscribersChangePercent: number
     viewsChange: number

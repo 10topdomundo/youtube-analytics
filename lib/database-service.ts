@@ -7,6 +7,7 @@ import type {
   ChannelAnalytics,
   ChannelCalculatedMetrics,
   ChannelWithMetrics,
+  TimePeriod,
 } from "./types"
 import { createClient } from "./supabase/server"
 
@@ -442,7 +443,7 @@ class DatabaseService {
     }
   }
 
-  async getChannelAnalytics(channelId: string, period: 3 | 7 | 30 = 30): Promise<ChannelAnalytics | null> {
+  async getChannelAnalytics(channelId: string, period: TimePeriod = 30): Promise<ChannelAnalytics | null> {
     const channel = await this.getChannel(channelId)
     const statistics = await this.getChannelStatistics(channelId)
     const ranks = await this.getChannelRanks(channelId)
