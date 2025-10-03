@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Label } from "@/components/ui/label"
 import { TrendingUp, Users, Eye, Play, Crown } from "lucide-react"
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts"
 
@@ -11,25 +13,28 @@ interface NichePerformanceData {
   totalChannels: number
   totalSubscribers: number
   totalViews: number
+  recentViews: number // Views for selected period (30 or 7 days)
   totalUploads: number
   avgViewsPerChannel: number
   avgSubscribersPerChannel: number
   avgViewsPerSubscriber: number
+  avgRecentViewsPerChannel: number
   rank: number
 }
 
 export function TopNichesDashboard() {
   const [nicheData, setNicheData] = useState<NichePerformanceData[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [timePeriod, setTimePeriod] = useState<string>("30")
 
   useEffect(() => {
     loadNicheData()
-  }, [])
+  }, [timePeriod])
 
   const loadNicheData = async () => {
     setIsLoading(true)
     try {
-      const response = await fetch("/api/channels/table-data")
+      const response = await fetch(`/api/channels/table-data?period=${timePeriod}`)
       if (!response.ok) {
         throw new Error("Failed to fetch channel data")
       }
@@ -62,27 +67,31 @@ export function TopNichesDashboard() {
       const totalChannels = channelList.length
       const totalSubscribers = channelList.reduce((sum, ch) => sum + (ch.total_subscribers || 0), 0)
       const totalViews = channelList.reduce((sum, ch) => sum + (ch.total_views || 0), 0)
+      const recentViews = channelList.reduce((sum, ch) => sum + (ch.views_last_30_days || ch.views_last_7_days || 0), 0)
       const totalUploads = channelList.reduce((sum, ch) => sum + (ch.total_uploads || 0), 0)
       
       const avgViewsPerChannel = totalChannels > 0 ? totalViews / totalChannels : 0
       const avgSubscribersPerChannel = totalChannels > 0 ? totalSubscribers / totalChannels : 0
       const avgViewsPerSubscriber = totalSubscribers > 0 ? totalViews / totalSubscribers : 0
+      const avgRecentViewsPerChannel = totalChannels > 0 ? recentViews / totalChannels : 0
 
       nicheMetrics.push({
         niche,
         totalChannels,
         totalSubscribers,
         totalViews,
+        recentViews,
         totalUploads,
         avgViewsPerChannel,
         avgSubscribersPerChannel,
         avgViewsPerSubscriber,
+        avgRecentViewsPerChannel,
         rank: 0 // Will be set after sorting
       })
     })
 
-    // Sort by total views and assign ranks
-    nicheMetrics.sort((a, b) => b.totalViews - a.totalViews)
+    // Sort by recent views instead of total views
+    nicheMetrics.sort((a, b) => b.recentViews - a.recentViews)
     nicheMetrics.forEach((niche, index) => {
       niche.rank = index + 1
     })
@@ -161,12 +170,27 @@ export function TopNichesDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-2 mb-6">
-        <Crown className="w-8 h-8 text-primary" />
-        <h1 className="text-3xl font-bold">Top 5 Performing Niches</h1>
-        <Badge variant="secondary" className="ml-2">
-          Ranked by Total Views
-        </Badge>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-2">
+          <Crown className="w-8 h-8 text-primary" />
+          <h1 className="text-3xl font-bold">Top 5 Performing Niches</h1>
+          <Badge variant="secondary" className="ml-2">
+            Ranked by Recent Views
+          </Badge>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Label>Time Period:</Label>
+          <Select value={timePeriod} onValueChange={setTimePeriod}>
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="30">Last 30 days</SelectItem>
+              <SelectItem value="7">Last 7 days</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Top 5 Niche Cards */}
@@ -198,9 +222,11 @@ export function TopNichesDashboard() {
                   </div>
                   <div>
                     <p className="text-2xl font-bold text-blue-600">
-                      {formatNumber(niche.totalViews)}
+                      {formatNumber(niche.recentViews)}
                     </p>
-                    <p className="text-sm text-muted-foreground">Total Views</p>
+                    <p className="text-sm text-muted-foreground">
+                      Recent Views ({timePeriod} days)
+                    </p>
                   </div>
                 </div>
 
@@ -301,6 +327,7 @@ export function TopNichesDashboard() {
     </div>
   )
 }
+
 
 
 

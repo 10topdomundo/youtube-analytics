@@ -38,9 +38,9 @@ export async function GET() {
       let ageClassification = "unknown"
       if (channel.channel_created_date) {
         const creationYear = new Date(channel.channel_created_date).getFullYear()
-        if (creationYear >= 2020) {
+        if (creationYear >= 2023) {
           ageClassification = "fresh"
-        } else if (creationYear >= 2006) {
+        } else if (creationYear <= 2022) {
           ageClassification = "aged"
         }
       }
@@ -70,6 +70,9 @@ export async function GET() {
       views_delta_3_days: channel.calculated?.views_delta_3_days ? 
         `${channel.calculated.views_delta_3_days.toFixed(1)}%` : "0%",
       views_per_subscriber: channel.calculated?.views_per_subscriber || 0,
+      
+      // Note: SocialBlade doesn't provide upload frequency data
+      // videos_uploaded_last_30_days: Not available from SocialBlade API
       
       // Removed assumption-based fields that were incorrectly calculated
       

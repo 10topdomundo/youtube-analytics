@@ -32,8 +32,8 @@ interface FolderStats {
   count: number
   color: string
   channels: Channel[]
-  freshCount: number // 2020-2025
-  agedCount: number  // 2006-2019
+  freshCount: number // 2023+
+  agedCount: number  // 2022-
 }
 
 interface FolderManagementProps {
@@ -141,10 +141,10 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
         
         let ageClassification = "unknown"
         if (creationYear) {
-          if (creationYear >= 2020) {
-            ageClassification = "fresh"
-          } else if (creationYear >= 2006) {
-            ageClassification = "aged"
+        if (creationYear >= 2023) {
+          ageClassification = "fresh"
+        } else if (creationYear <= 2022) {
+          ageClassification = "aged"
           }
         }
         

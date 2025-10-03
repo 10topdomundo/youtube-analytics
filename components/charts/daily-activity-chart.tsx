@@ -36,7 +36,7 @@ export function DailyActivityChart({ data, title = "Daily Activity" }: DailyActi
       date: formatDate(stat.stat_date),
       dailyViews: dailyViewsChange,
       dailySubsGained: dailySubsChange,
-      videoUploads: Math.floor(Math.random() * 3), // Mock video uploads
+      // videoUploads: Not available from SocialBlade API
     }
   })
 

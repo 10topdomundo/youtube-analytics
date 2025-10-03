@@ -103,9 +103,9 @@ export function AdvancedChannelTable({
         
         let ageClassification = "unknown"
         if (creationYear) {
-          if (creationYear >= 2020) {
+          if (creationYear >= 2023) {
             ageClassification = "fresh"
-          } else if (creationYear >= 2006) {
+          } else if (creationYear <= 2022) {
             ageClassification = "aged"
           } else {
             ageClassification = "vintage"
@@ -399,8 +399,8 @@ export function AdvancedChannelTable({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__all__">All ages</SelectItem>
-                    <SelectItem value="fresh">Fresh (2020+)</SelectItem>
-                    <SelectItem value="aged">Aged (2006-2019)</SelectItem>
+                    <SelectItem value="fresh">Fresh (2023+)</SelectItem>
+                    <SelectItem value="aged">Aged (2022-)</SelectItem>
                     <SelectItem value="unknown">Unknown</SelectItem>
                   </SelectContent>
                 </Select>

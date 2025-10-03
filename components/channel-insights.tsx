@@ -19,6 +19,7 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
   const [channels, setChannels] = useState<any[]>([])
   const [selectedChannelId, setSelectedChannelId] = useState<string>(channelId || "")
   const [selectedPeriod, setSelectedPeriod] = useState<TimePeriod>(30)
+  const [selectedNiche, setSelectedNiche] = useState<string>("all")
   const [analytics, setAnalytics] = useState<ChannelAnalytics | null>(null)
   const [performanceMetrics, setPerformanceMetrics] = useState<any>(null)
   const [takeoffData, setTakeoffData] = useState<any>(null)
@@ -40,6 +41,14 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
       loadChannelData()
     }
   }, [selectedChannelId, selectedPeriod])
+
+  useEffect(() => {
+    // Reset selected channel when niche filter changes
+    const filteredChannels = getFilteredChannels()
+    if (selectedChannelId && !filteredChannels.find(c => c.channel_id === selectedChannelId)) {
+      setSelectedChannelId("")
+    }
+  }, [selectedNiche, channels])
 
   const loadChannels = async () => {
     try {
@@ -78,6 +87,22 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const getUniqueNiches = () => {
+    const niches = channels.map(channel => channel.channel_niche || channel.niche).filter(Boolean)
+    return [...new Set(niches)].sort()
+  }
+
+  const getFilteredChannels = () => {
+    if (selectedNiche === "all") {
+      return channels.filter((channel) => channel.channel_id && channel.channel_id.trim() !== "")
+    }
+    return channels.filter((channel) => 
+      channel.channel_id && 
+      channel.channel_id.trim() !== "" &&
+      (channel.channel_niche === selectedNiche || channel.niche === selectedNiche)
+    )
   }
 
   const formatNumber = (num: number) => {
@@ -218,18 +243,30 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
         </div>
 
         <div className="flex items-center gap-4">
+          <Select value={selectedNiche} onValueChange={setSelectedNiche}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="All niches" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All niches</SelectItem>
+              {getUniqueNiches().map((niche) => (
+                <SelectItem key={niche} value={niche}>
+                  {niche}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
           <Select value={selectedChannelId} onValueChange={setSelectedChannelId}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder="Select channel" />
             </SelectTrigger>
             <SelectContent>
-              {channels
-                .filter((channel) => channel.channel_id && channel.channel_id.trim() !== "")
-                .map((channel) => (
-                  <SelectItem key={channel.channel_id} value={channel.channel_id}>
-                    {channel.display_name || channel.channel_name}
-                  </SelectItem>
-                ))}
+              {getFilteredChannels().map((channel) => (
+                <SelectItem key={channel.channel_id} value={channel.channel_id}>
+                  {channel.display_name || channel.channel_name}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
 
@@ -293,7 +330,7 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Subscribers</p>
                     <p className="text-2xl font-bold text-foreground">
-                      {formatNumber(analytics.statistics.total_subscribers)}
+                      {formatNumber(analytics.dailyStats[analytics.dailyStats.length - 1]?.subscribers || analytics.statistics.total_subscribers)}
                     </p>
                     <div className="flex items-center gap-1 mt-1">
                       {getGrowthIcon(analytics.growth.subscribersChangePercent)}
@@ -304,6 +341,9 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
                       </span>
                       <span className="text-sm text-muted-foreground">
                         ({formatNumber(analytics.growth.subscribersChange)})
+                      </span>
+                      <span className="text-sm text-muted-foreground ml-1">
+                        last {analytics.growth.period} days
                       </span>
                     </div>
                   </div>
@@ -320,7 +360,7 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">Total Views</p>
                     <p className="text-2xl font-bold text-foreground">
-                      {formatNumber(analytics.statistics.total_views)}
+                      {formatNumber(analytics.dailyStats[analytics.dailyStats.length - 1]?.views || analytics.statistics.total_views)}
                     </p>
                     <div className="flex items-center gap-1 mt-1">
                       {getGrowthIcon(analytics.growth.viewsChangePercent)}
@@ -329,6 +369,9 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
                       </span>
                       <span className="text-sm text-muted-foreground">
                         ({formatNumber(analytics.growth.viewsChange)})
+                      </span>
+                      <span className="text-sm text-muted-foreground ml-1">
+                        last {analytics.growth.period} days
                       </span>
                     </div>
                   </div>
@@ -343,10 +386,10 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
               <CardContent className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-muted-foreground">Videos Uploaded</p>
+                    <p className="text-sm font-medium text-muted-foreground">Total Videos Uploaded</p>
                     <p className="text-2xl font-bold text-foreground">{analytics.statistics.total_uploads}</p>
                     <div className="flex items-center gap-1 mt-1">
-                      <span className="text-sm text-muted-foreground">Last {selectedPeriod} days</span>
+                      <span className="text-sm text-muted-foreground">Lifetime total</span>
                     </div>
                   </div>
                   <div className="p-2 bg-primary/10 rounded-lg">
@@ -393,6 +436,7 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
                         {formatNumber(performanceMetrics.viewsPerUpload)}
                       </span>
                     </div>
+                    {/* Average Videos per Day removed - SocialBlade doesn't provide upload frequency data */}
                   </div>
                 </CardContent>
               </Card>
@@ -403,29 +447,63 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Clock className="w-5 h-5" />
-                      Channel Growth Timeline
+                      Takeoff Analysis
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="space-y-3">
-                      {/* Removed "Days to First Upload" - this data is not available from the API and was hardcoded */}
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Days to Takeoff</span>
-                        <span className="font-semibold text-foreground">{takeoffData.daysToTakeoff} days</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-sm text-muted-foreground">Videos to Takeoff</span>
-                        <span className="font-semibold text-foreground">{takeoffData.videosToTakeoff} videos</span>
-                      </div>
-                      <div className="pt-2 border-t">
+                    {takeoffData.hasTakenOff ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="w-3 h-3 bg-green-500 rounded-full"></div>
+                          <span className="text-sm font-medium text-green-800">Channel has taken off!</span>
+                        </div>
+                        
                         <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Takeoff Date</span>
-                          <span className="font-semibold text-foreground">
-                            {new Date(takeoffData.takeoffDate).toLocaleDateString()}
-                          </span>
+                          <span className="text-sm text-muted-foreground">Days to Takeoff</span>
+                          <span className="font-semibold text-foreground">{takeoffData.daysToTakeoff} days</span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Takeoff Month Views</span>
+                          <span className="font-semibold text-foreground">{takeoffData.monthlyViews?.toLocaleString()} views</span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm text-muted-foreground">Growth Rate</span>
+                          <span className="font-semibold text-green-600">+{takeoffData.growthRate}%</span>
+                        </div>
+                        
+                        <div className="pt-2 border-t">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-muted-foreground">Takeoff Date</span>
+                            <span className="font-semibold text-foreground">
+                              {new Date(takeoffData.takeoffDate).toLocaleDateString()}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center mt-2">
+                            <span className="text-sm text-muted-foreground">Data Analyzed</span>
+                            <span className="text-sm text-muted-foreground">{takeoffData.totalDaysAnalyzed} days</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                          <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
+                          <span className="text-sm font-medium text-orange-800">No takeoff detected</span>
+                        </div>
+                        
+                        <div className="text-sm text-muted-foreground p-3 bg-muted/50 rounded-lg">
+                          <strong>Takeoff Criteria:</strong> 50,000+ views in a single month with 1000%+ growth from previous month
+                          <br />
+                          <strong>Data Analyzed:</strong> {takeoffData.totalDaysAnalyzed} days of history
+                        </div>
+                        
+                        <div className="text-sm text-muted-foreground">
+                          <strong>Reason:</strong> {takeoffData.reason}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}

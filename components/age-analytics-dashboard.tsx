@@ -86,10 +86,10 @@ export function AgeAnalyticsDashboard() {
         
         let ageClassification = "unknown"
         if (creationYear) {
-          if (creationYear >= 2020) {
-            ageClassification = "fresh"
-          } else if (creationYear >= 2006) {
-            ageClassification = "aged"
+        if (creationYear >= 2023) {
+          ageClassification = "fresh"
+        } else if (creationYear <= 2022) {
+          ageClassification = "aged"
           }
         }
         
@@ -159,8 +159,8 @@ export function AgeAnalyticsDashboard() {
   }
 
   const getOverallPieData = (): PieChartData[] => [
-    { name: "Fresh (2020+)", value: overallStats.freshCount, color: AGE_COLORS.fresh },
-    { name: "Aged (2006-2019)", value: overallStats.agedCount, color: AGE_COLORS.aged },
+    { name: "Fresh (2023+)", value: overallStats.freshCount, color: AGE_COLORS.fresh },
+    { name: "Aged (2022-)", value: overallStats.agedCount, color: AGE_COLORS.aged },
   ].filter(item => item.value > 0)
 
   const getNichePieData = (): PieChartData[] => {
@@ -175,8 +175,8 @@ export function AgeAnalyticsDashboard() {
       if (!nicheData) return []
       
       return [
-        { name: "Fresh (2020+)", value: nicheData.fresh, color: AGE_COLORS.fresh },
-        { name: "Aged (2006-2019)", value: nicheData.aged, color: AGE_COLORS.aged },
+        { name: "Fresh (2023+)", value: nicheData.fresh, color: AGE_COLORS.fresh },
+        { name: "Aged (2022-)", value: nicheData.aged, color: AGE_COLORS.aged },
       ].filter(item => item.value > 0).filter(item => item.value > 0)
     }
   }

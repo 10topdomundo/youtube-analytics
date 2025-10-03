@@ -28,23 +28,18 @@ interface ChannelManagementProps {
   isAdmin?: boolean
 }
 
-const NICHES = [
-  "Technology",
-  "Education",
-  "Finance",
-  "Business",
-  "Lifestyle",
-  "Gaming",
-  "Entertainment",
-  "Health",
-  "Travel",
-  "Food",
+// Remove hardcoded niches - will fetch from existing channels
+// Fallback niches for when no channels exist yet
+const FALLBACK_NICHES = [
+  "Technology", "Education", "Finance", "Business", "Lifestyle", 
+  "Gaming", "Entertainment", "Health", "Travel", "Food"
 ]
 // Removed mock data - now using real channel statistics
 
 export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
   const [channels, setChannels] = useState<Channel[]>([])
   const [filteredChannels, setFilteredChannels] = useState<Channel[]>([])
+  const [availableNiches, setAvailableNiches] = useState<string[]>([])
   const [channelStats, setChannelStats] = useState<Record<string, any>>({})
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedNiche, setSelectedNiche] = useState<string>("all")
@@ -98,6 +93,15 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
     filterChannels()
   }, [channels, searchTerm, selectedNiche])
 
+  const getUniqueNiches = (channelList: Channel[]) => {
+    const niches = channelList
+      .map(channel => channel.channel_niche)
+      .filter(Boolean) // Remove null/undefined values
+      .filter((niche, index, array) => array.indexOf(niche) === index) // Remove duplicates
+      .sort() // Sort alphabetically
+    return niches
+  }
+
   const loadChannels = async () => {
     try {
       const response = await fetch("/api/channels")
@@ -106,6 +110,10 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
       }
       const channelData = await response.json()
       setChannels(channelData)
+      
+      // Update available niches from loaded channels
+      const uniqueNiches = getUniqueNiches(channelData)
+      setAvailableNiches(uniqueNiches as string[])
     } catch (error) {
       console.error("Failed to load channels:", error)
     }
@@ -624,11 +632,34 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
                         <SelectValue placeholder="Select niche" />
                       </SelectTrigger>
                       <SelectContent>
-                        {NICHES.map((niche) => (
+                        {/* Show existing niches from database first */}
+                        {availableNiches.map((niche) => (
                           <SelectItem key={niche} value={niche}>
                             {niche}
                           </SelectItem>
                         ))}
+                        
+                        {/* If no existing niches, show fallback options */}
+                        {availableNiches.length === 0 && FALLBACK_NICHES.map((niche) => (
+                          <SelectItem key={niche} value={niche}>
+                            {niche}
+                          </SelectItem>
+                        ))}
+                        
+                        {/* Separator if both exist */}
+                        {availableNiches.length > 0 && (
+                          <>
+                            <div className="border-t my-1"></div>
+                            <div className="px-2 py-1 text-xs text-muted-foreground">
+                              Common niches:
+                            </div>
+                            {FALLBACK_NICHES.filter(niche => !availableNiches.includes(niche)).map((niche) => (
+                              <SelectItem key={`fallback-${niche}`} value={niche}>
+                                {niche}
+                              </SelectItem>
+                            ))}
+                          </>
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -726,7 +757,7 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Niches</SelectItem>
-              {NICHES.map((niche) => (
+              {availableNiches.map((niche) => (
                 <SelectItem key={niche} value={niche}>
                   {niche}
                 </SelectItem>

@@ -358,16 +358,21 @@ class DatabaseService {
 
     if (!channelData) return []
 
-    const cutoffDate = new Date()
-    cutoffDate.setDate(cutoffDate.getDate() - days)
-
-    // Then get the daily stats using the UUID
-    const { data, error } = await supabase
+    let query = supabase
       .from("channel_daily_stats")
       .select("*")
       .eq("channel_id", channelData.id)
-      .gte("date", cutoffDate.toISOString().split("T")[0])
       .order("date", { ascending: true })
+
+    // Only apply date filter if days is reasonable (not trying to get all data)
+    if (days < 9999) {
+      const cutoffDate = new Date()
+      cutoffDate.setDate(cutoffDate.getDate() - days)
+      query = query.gte("date", cutoffDate.toISOString().split("T")[0])
+    }
+    // For days >= 9999, fetch ALL available data (no date filter)
+
+    const { data, error } = await query
 
     if (error || !data) return []
     return data.map((item) => this.mapDbDailyStatsToStats(item, channelId))

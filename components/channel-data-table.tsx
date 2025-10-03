@@ -25,6 +25,7 @@ interface ChannelTableData {
   views_delta_7_days: string
   views_delta_3_days: string
   views_per_subscriber: number
+  // videos_uploaded_last_30_days: number // Not available from SocialBlade API
   // Removed assumption-based fields that were incorrectly calculated:
   // uploads_last_30d: based on incorrect assumptions about upload frequency
   // videos_until_takeoff: based on assumed "takeoff point" 
@@ -52,6 +53,7 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
     "niche",
     "language", 
     "views_last_30_days",
+    // "videos_uploaded_last_30_days", // Not available from SocialBlade API
     "views_delta_30_days",
     "views_delta_7_days",
     "views_delta_3_days",
@@ -72,6 +74,8 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null)
   // Removed takeoff filter functionality - was based on incorrect assumptions
   const [timePeriod, setTimePeriod] = useState<string>("30")
+  const [selectedNiche, setSelectedNiche] = useState<string>("all")
+  const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null)
   const [showColumnSelection, setShowColumnSelection] = useState(false)
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set(columns))
 
@@ -81,7 +85,7 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
 
   useEffect(() => {
     applyFilters()
-  }, [data])
+  }, [data, selectedNiche, sortConfig])
 
   const loadChannelData = async () => {
     setIsLoading(true)
@@ -102,8 +106,60 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
   // Removed loadTakeoffChannels function - was based on incorrect assumptions
 
   const applyFilters = () => {
-    // Just copy all data since we removed takeoff filtering
-    setFilteredData([...data])
+    let filtered = [...data]
+    
+    // Apply niche filter
+    if (selectedNiche !== "all") {
+      filtered = filtered.filter(channel => channel.niche === selectedNiche)
+    }
+    
+    // Apply sorting
+    if (sortConfig) {
+      filtered.sort((a, b) => {
+        const aValue = a[sortConfig.key]
+        const bValue = b[sortConfig.key]
+        
+        // Handle different data types
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue
+        }
+        
+        // Handle string comparison
+        const aStr = String(aValue || '').toLowerCase()
+        const bStr = String(bValue || '').toLowerCase()
+        
+        if (sortConfig.direction === 'asc') {
+          return aStr.localeCompare(bStr)
+        } else {
+          return bStr.localeCompare(aStr)
+        }
+      })
+    }
+    
+    setFilteredData(filtered)
+  }
+
+  const handleSort = (columnKey: string) => {
+    let direction: 'asc' | 'desc' = 'asc'
+    
+    if (sortConfig && sortConfig.key === columnKey && sortConfig.direction === 'asc') {
+      direction = 'desc'
+    }
+    
+    setSortConfig({ key: columnKey, direction })
+  }
+
+  const getSortIcon = (columnKey: string) => {
+    if (!sortConfig || sortConfig.key !== columnKey) {
+      return null
+    }
+    
+    return sortConfig.direction === 'asc' ? '↑' : '↓'
+  }
+
+  const getUniqueNiches = () => {
+    const niches = data.map(channel => channel.niche).filter(Boolean)
+    return [...new Set(niches)].sort()
   }
 
   const addColumn = () => {
@@ -197,6 +253,7 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
       "niche": "Niche",
       "language": "Language", 
       "views_last_30_days": "Views last 30 days",
+      // "videos_uploaded_last_30_days": "Videos uploaded last 30 days", // Not available from SocialBlade
       "views_delta_30_days": "Views Δ% 30 days",
       "views_delta_7_days": "Views Δ% 7 days",
       "views_delta_3_days": "Views Δ% 3 days",
@@ -417,6 +474,31 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
           </p>
         </div>
 
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <Label>Filter by niche:</Label>
+            <Select value={selectedNiche} onValueChange={setSelectedNiche}>
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="All niches" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All niches</SelectItem>
+                {getUniqueNiches().map((niche) => (
+                  <SelectItem key={niche} value={niche}>
+                    {niche}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-muted-foreground">
+          Showing {filteredData.length} of {data.length} channels
+        </div>
+
         {isAdmin && (
           <div className="flex items-center gap-2">
             {/* Removed takeoff filter - was based on incorrect assumptions */}
@@ -545,8 +627,16 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
                     <TableRow>
                       {columns.map((column) => (
                         <TableHead key={column} className="min-w-[120px] text-xs">
-                          <div className="flex items-center justify-between">
-                            {formatColumnName(column)}
+                          <div 
+                            className="flex items-center justify-between cursor-pointer hover:bg-muted/50 p-1 rounded"
+                            onClick={() => handleSort(column)}
+                          >
+                            <span className="flex items-center gap-1">
+                              {formatColumnName(column)}
+                              <span className="text-muted-foreground text-[10px]">
+                                {getSortIcon(column)}
+                              </span>
+                            </span>
                             {showColumnSelection && (
                               <div className="ml-2">
                                 {selectedColumns.has(column) ? (
