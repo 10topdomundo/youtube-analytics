@@ -210,13 +210,7 @@ export function AnalyticsDashboard() {
                 <p className="text-sm font-medium text-muted-foreground">Top Niche</p>
                 <p className="text-2xl font-bold text-foreground">{overview.topPerformingNiche?.niche || "N/A"}</p>
                 {overview.topPerformingNiche && (
-                  <div className="flex items-center gap-1 mt-1">
-                    {getGrowthIcon(overview.topPerformingNiche.viewsChangePercent)}
-                    <span
-                      className={`text-sm font-medium ${getGrowthColor(overview.topPerformingNiche.viewsChangePercent)}`}
-                    >
-                      {formatPercentage(overview.topPerformingNiche.viewsChangePercent)}
-                    </span>
+                  <div className="flex items-center gap-1 mt-1">                  
                   </div>
                 )}
               </div>

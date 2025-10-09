@@ -78,21 +78,26 @@ export class AnalyticsService {
     }
   }
 
-  // Get niche comparison data - simplified implementation
+  // Get niche comparison data - optimized implementation
   static async getNicheComparison(period: TimePeriod = 30) {
-    const channels = await databaseService.getAllChannels()
+    // Optimized: Batch fetch all channels with metrics instead of N+1 queries
+    const channelsWithMetrics = await databaseService.getAllChannelsWithMetrics()
     const nicheMap = new Map<string, { totalViews: number; totalSubscribers: number; channelCount: number }>()
 
-    for (const channel of channels) {
-      const analytics = await this.getChannelInsights(channel.channel_id, period)
-      if (!analytics) continue
+    // Process all channels (no async calls in loop - data already fetched)
+    for (const channel of channelsWithMetrics) {
+      if (!channel.statistics) continue
 
-      const niche = channel.channel_niche || "Unknown"
+      // Skip channels without a proper niche set (don't include "Unknown" in comparisons)
+      const rawNiche = channel.channel_niche?.trim()
+      if (!rawNiche || rawNiche === '') continue
+
+      const niche = rawNiche
       const existing = nicheMap.get(niche) || { totalViews: 0, totalSubscribers: 0, channelCount: 0 }
 
       nicheMap.set(niche, {
-        totalViews: existing.totalViews + analytics.statistics.total_views,
-        totalSubscribers: existing.totalSubscribers + analytics.statistics.total_subscribers,
+        totalViews: existing.totalViews + channel.statistics.total_views,
+        totalSubscribers: existing.totalSubscribers + channel.statistics.total_subscribers,
         channelCount: existing.channelCount + 1,
       })
     }

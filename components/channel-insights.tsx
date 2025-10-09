@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts"
+import { LoadingSpinner, LoadingOverlay } from "@/components/ui/loading-spinner"
 import type { TimePeriod, ChannelAnalytics } from "@/lib/types"
 
 interface ChannelInsightsProps {
@@ -24,6 +25,7 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
   const [performanceMetrics, setPerformanceMetrics] = useState<any>(null)
   const [takeoffData, setTakeoffData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingChannels, setIsLoadingChannels] = useState(true)
   
   // Group analysis state
   const [groupAnalysisData, setGroupAnalysisData] = useState<any[]>([])
@@ -51,10 +53,13 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
   }, [selectedNiche, channels])
 
   const loadChannels = async () => {
+    setIsLoadingChannels(true)
     try {
-      const response = await fetch("/api/channels")
+      // Fetch all channels - use a large limit to get all channels for the dropdown
+      const response = await fetch("/api/channels?page=1&limit=1000")
       if (!response.ok) throw new Error("Failed to fetch channels")
-      const channelData = await response.json()
+      const data = await response.json()
+      const channelData = data.channels || []
       setChannels(channelData)
       if (!selectedChannelId && channelData.length > 0) {
         // Find the first channel with a valid channel_id
@@ -67,6 +72,8 @@ export function ChannelInsights({ channelId }: ChannelInsightsProps) {
       }
     } catch (error) {
       console.error("Failed to load channels:", error)
+    } finally {
+      setIsLoadingChannels(false)
     }
   }
 

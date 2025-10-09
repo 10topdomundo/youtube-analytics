@@ -3,23 +3,33 @@ import { databaseService } from "@/lib/database-service"
 
 export const dynamic = 'force-dynamic'
 
-// Simple in-memory cache for table data
-let tableDataCache: any = null
-let cacheTimestamp: number = 0
-const CACHE_DURATION = 5 * 60 * 1000 // 5 minutes
+// Enhanced in-memory cache for table data with 1-minute duration
+let tableDataCache: Map<string, { data: any, timestamp: number }> = new Map()
+const CACHE_DURATION = 60 * 1000 // 1 minute
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     console.log("=== Table Data API Debug ===")
     
+    // Get period parameter from URL
+    const { searchParams } = new URL(request.url)
+    const period = searchParams.get('period') || '30'
+    console.log("Requested period:", period)
+    
+    // Create cache key that includes the period
+    const cacheKey = `table-data-${period}`
+    
     // Check cache first
     const now = Date.now()
-    if (tableDataCache && (now - cacheTimestamp) < CACHE_DURATION) {
-      console.log("Returning cached table data")
-      return NextResponse.json(tableDataCache)
+    const cachedEntry = tableDataCache.get(cacheKey)
+    if (cachedEntry && (now - cachedEntry.timestamp) < CACHE_DURATION) {
+      console.log("Returning cached table data for period:", period)
+      return NextResponse.json(cachedEntry.data)
     }
 
-    console.log("Fetching fresh table data...")
+    console.log("Fetching fresh table data for period:", period)
+    
+    // Use optimized batch fetching
     const channels = await databaseService.getAllChannelsWithMetrics()
     console.log("Channels fetched:", channels.length)
     
@@ -33,7 +43,8 @@ export async function GET() {
       })
     }
 
-    const tableData = channels.map((channel) => {
+    // Process all channels in parallel for the specific period
+    const tableData = await Promise.all(channels.map(async (channel) => {
       // Calculate age classification based on creation date
       let ageClassification = "unknown"
       if (channel.channel_created_date) {
@@ -45,6 +56,23 @@ export async function GET() {
         }
       }
 
+      // Get period-specific analytics for the main period (only if needed)
+      const periodInt = parseInt(period)
+      let periodSpecificViews = 0
+      
+      // For common periods, use pre-calculated values from metrics
+      if (periodInt === 30 && channel.calculated?.views_last_30_days) {
+        periodSpecificViews = channel.calculated.views_last_30_days
+      } else if (periodInt === 7 && channel.calculated?.views_last_7_days) {
+        periodSpecificViews = channel.calculated.views_last_7_days
+      } else if (periodInt === 3 && channel.calculated?.views_last_3_days) {
+        periodSpecificViews = channel.calculated.views_last_3_days
+      } else {
+        // For non-standard periods, fetch analytics (this is the slower path)
+        const analytics = await databaseService.getChannelAnalytics(channel.channel_id, periodInt as any)
+        periodSpecificViews = analytics?.growth?.viewsChange || 0
+      }
+      
       return {
         // Core identification
         channel_id: channel.channel_id,
@@ -56,42 +84,37 @@ export async function GET() {
         channel_type: ageClassification, // Auto-populated based on creation date
         language: channel.channel_language || "",
       
-      // Statistics (from database)
-      total_subscribers: channel.statistics?.total_subscribers || 0,
-      total_views: channel.statistics?.total_views || 0,
-      total_uploads: channel.statistics?.total_uploads || 0,
-      
-      // Analytics (calculated)
-      views_last_30_days: channel.calculated?.views_last_30_days || 0,
-      views_delta_30_days: channel.calculated?.views_delta_30_days ? 
-        `${channel.calculated.views_delta_30_days.toFixed(1)}%` : "0%",
-      views_delta_7_days: channel.calculated?.views_delta_7_days ? 
-        `${channel.calculated.views_delta_7_days.toFixed(1)}%` : "0%",
-      views_delta_3_days: channel.calculated?.views_delta_3_days ? 
-        `${channel.calculated.views_delta_3_days.toFixed(1)}%` : "0%",
-      views_per_subscriber: channel.calculated?.views_per_subscriber || 0,
-      
-      // Note: SocialBlade doesn't provide upload frequency data
-      // videos_uploaded_last_30_days: Not available from SocialBlade API
-      
-      // Removed assumption-based fields that were incorrectly calculated
-      
-      // Channel info (editable)
-      channel_creation: channel.channel_created_date ? 
-        new Date(channel.channel_created_date).toLocaleDateString() : "",
-      thumbnail_style: channel.thumbnail_style || "",
-      video_style: channel.video_style || "",
-      video_length: channel.video_length || "",
-      status: channel.status || "Active",
-      notes: channel.notes || "",
-      
-      // Internal fields for editing
-      id: channel.id,
-      
-      // Include custom fields if they exist
-      ...(channel.custom_fields || {})
-    }
-    })
+        // Statistics (current totals - not period-based)
+        total_subscribers: channel.statistics?.total_subscribers || 0,
+        total_views: channel.statistics?.total_views || 0,
+        total_uploads: channel.statistics?.total_uploads || 0,
+        
+        // Analytics (period-based from analytics)
+        [`views_last_${period}_days`]: periodSpecificViews, // Dynamic field name based on period
+        views_delta_30_days: channel.calculated?.views_delta_30_days ? 
+          `${channel.calculated.views_delta_30_days.toFixed(1)}%` : "0%",
+        views_delta_7_days: channel.calculated?.views_delta_7_days ? 
+          `${channel.calculated.views_delta_7_days.toFixed(1)}%` : "0%",
+        views_delta_3_days: channel.calculated?.views_delta_3_days ? 
+          `${channel.calculated.views_delta_3_days.toFixed(1)}%` : "0%",
+        views_per_subscriber: channel.calculated?.views_per_subscriber || 0,
+        
+        // Channel info (editable)
+        channel_creation: channel.channel_created_date ? 
+          new Date(channel.channel_created_date).toLocaleDateString() : "",
+        thumbnail_style: channel.thumbnail_style || "",
+        video_style: channel.video_style || "",
+        video_length: channel.video_length || "",
+        status: channel.status || "Active",
+        notes: channel.notes || "",
+        
+        // Internal fields for editing
+        id: channel.id,
+        
+        // Include custom fields if they exist
+        ...(channel.custom_fields || {})
+      }
+    }))
 
     console.log("Table data sample:", tableData.length > 0 ? {
       id: tableData[0].id,
@@ -101,9 +124,11 @@ export async function GET() {
     } : "No data")
     console.log("=== End Table Data API Debug ===")
 
-    // Cache the result
-    tableDataCache = tableData
-    cacheTimestamp = now
+    // Cache the result with period-specific key
+    tableDataCache.set(cacheKey, {
+      data: tableData,
+      timestamp: now
+    })
 
     return NextResponse.json(tableData)
   } catch (error) {
@@ -174,8 +199,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Invalidate cache after updates
-    tableDataCache = null
-    cacheTimestamp = 0
+    tableDataCache.clear()
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -11,6 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts"
 
 interface Channel {
@@ -114,6 +116,11 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
   const [chartData, setChartData] = useState<ChartData[]>([])
   const [folderTableData, setFolderTableData] = useState<ChannelTableData[]>([])
   const [isLoadingChartData, setIsLoadingChartData] = useState(false)
+  
+  // Custom range selection state
+  const [useCustomRanges, setUseCustomRanges] = useState(false)
+  const [customRanges, setCustomRanges] = useState<string>("")
+  const [numberOfBuckets, setNumberOfBuckets] = useState<number>(5)
 
   useEffect(() => {
     loadChannels()
@@ -128,10 +135,12 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
   const loadChannels = async () => {
     try {
       setIsLoading(true)
-      const response = await fetch("/api/channels")
+      // Fetch all channels - use a large limit to get all channels
+      const response = await fetch("/api/channels?page=1&limit=1000")
       if (!response.ok) throw new Error("Failed to fetch channels")
       
-      const channelData = await response.json()
+      const data = await response.json()
+      const channelData = data.channels || []
       
       // Process channels to add age classification
       const processedChannels = channelData.map((channel: any) => {
@@ -332,6 +341,27 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
 
   // Removed redundant loadFolderTableData function - logic moved to handleCreateChart
 
+  // Helper function to parse custom ranges
+  const parseCustomRanges = (rangesText: string): number[] => {
+    try {
+      return rangesText
+        .split(',')
+        .map(r => r.trim())
+        .filter(r => r !== '')
+        .map(r => {
+          const num = parseFloat(r.replace(/[,k]/gi, '').replace('K', '000').replace('M', '000000').replace('B', '000000000'))
+          if (r.toLowerCase().includes('k')) return num * 1000
+          if (r.toLowerCase().includes('m')) return num * 1000000
+          if (r.toLowerCase().includes('b')) return num * 1000000000
+          return num
+        })
+        .filter(n => !isNaN(n))
+        .sort((a, b) => a - b)
+    } catch {
+      return []
+    }
+  }
+
   // Generate chart data based on selected metric
   const generateChartData = (metric: string, data: ChannelTableData[]): ChartData[] => {
     if (!data.length) return []
@@ -377,7 +407,15 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
           })).filter(item => item.value > 0)
         }
 
-        // For larger datasets, create ranges
+        // Check if using custom ranges
+        if (useCustomRanges && customRanges.trim()) {
+          const customBreakpoints = parseCustomRanges(customRanges)
+          if (customBreakpoints.length > 0) {
+            return createCustomRangeBuckets(values, customBreakpoints, colors, formatNumber)
+          }
+        }
+
+        // Default automatic range creation
         values.sort((a, b) => a - b)
         const min = values[0]
         const max = values[values.length - 1]
@@ -391,18 +429,21 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
           }]
         }
         
-        const range = (max - min) / 5 // Create 5 buckets
+        const range = (max - min) / numberOfBuckets
+        const buckets: { name: string; count: number }[] = []
 
-        const buckets = [
-          { name: `${formatNumber(min)} - ${formatNumber(min + range)}`, count: 0 },
-          { name: `${formatNumber(min + range)} - ${formatNumber(min + 2 * range)}`, count: 0 },
-          { name: `${formatNumber(min + 2 * range)} - ${formatNumber(min + 3 * range)}`, count: 0 },
-          { name: `${formatNumber(min + 3 * range)} - ${formatNumber(min + 4 * range)}`, count: 0 },
-          { name: `${formatNumber(min + 4 * range)}+`, count: 0 }
-        ]
+        // Create dynamic number of buckets
+        for (let i = 0; i < numberOfBuckets; i++) {
+          const start = min + i * range
+          const end = i === numberOfBuckets - 1 ? max : min + (i + 1) * range
+          buckets.push({
+            name: i === numberOfBuckets - 1 ? `${formatNumber(start)}+` : `${formatNumber(start)} - ${formatNumber(end)}`,
+            count: 0
+          })
+        }
 
         values.forEach(value => {
-          const bucketIndex = Math.min(Math.floor((value - min) / range), 4)
+          const bucketIndex = Math.min(Math.floor((value - min) / range), numberOfBuckets - 1)
           buckets[bucketIndex].count++
         })
 
@@ -410,11 +451,47 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
           name: bucket.name,
           value: bucket.count,
           color: colors[index % colors.length]
-        })).filter(item => item.value > 0)
+        }))
 
       default:
         return []
     }
+  }
+
+  // Helper function to create custom range buckets
+  const createCustomRangeBuckets = (values: number[], breakpoints: number[], colors: string[], formatNumber: (num: number) => string): ChartData[] => {
+    const buckets: { name: string; count: number }[] = []
+    
+    // Create buckets based on custom breakpoints
+    for (let i = 0; i <= breakpoints.length; i++) {
+      let name: string
+      if (i === 0) {
+        name = `< ${formatNumber(breakpoints[0])}`
+      } else if (i === breakpoints.length) {
+        name = `${formatNumber(breakpoints[i - 1])}+`
+      } else {
+        name = `${formatNumber(breakpoints[i - 1])} - ${formatNumber(breakpoints[i])}`
+      }
+      buckets.push({ name, count: 0 })
+    }
+
+    // Distribute values into buckets
+    values.forEach(value => {
+      let bucketIndex = breakpoints.length // Default to last bucket (highest range)
+      for (let i = 0; i < breakpoints.length; i++) {
+        if (value < breakpoints[i]) {
+          bucketIndex = i
+          break
+        }
+      }
+      buckets[bucketIndex].count++
+    })
+
+    return buckets.map((bucket, index) => ({
+      name: bucket.name,
+      value: bucket.count,
+      color: colors[index % colors.length]
+    })).filter(bucket => bucket.value > 0) // Only show non-empty buckets
   }
 
   // Handle metric selection and chart generation
@@ -715,11 +792,11 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
       {/* Enhanced Folder Detail Dialog */}
       <Dialog open={!!selectedFolder} onOpenChange={() => setSelectedFolder(null)}>
         <DialogContent 
-          className="w-[25vw] max-w-none h-[50vh] max-h-none overflow-hidden !w-[25vw] !max-w-none" 
+          className="w-[90vw] max-w-none h-[85vh] max-h-none overflow-hidden !w-[90vw] !max-w-none" 
           style={{ 
-            width: '25vw !important', 
+            width: '90vw !important', 
             maxWidth: 'none !important',
-            minWidth: '25vw'
+            minWidth: '90vw'
           }}
         >
           <DialogHeader className="pb-4 border-b">
@@ -757,7 +834,7 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
                 </TabsTrigger>
               </TabsList>
 
-              <TabsContent value="overview" className="space-y-6 overflow-y-auto max-h-[calc(95vh-200px)]">
+              <TabsContent value="overview" className="space-y-6 overflow-y-auto max-h-[calc(85vh-200px)]">
               {/* Folder Stats Summary */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-gradient-to-br from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
@@ -924,7 +1001,7 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
               </TabsContent>
 
               {/* Charts Tab */}
-              <TabsContent value="charts" className="space-y-6 overflow-y-auto max-h-[calc(95vh-200px)]">
+              <TabsContent value="charts" className="space-y-6 overflow-y-auto max-h-[calc(85vh-200px)]">
                 <div className="space-y-6">
                   {/* Chart Creation Controls */}
                   <div className="bg-muted/30 p-6 rounded-lg border">
@@ -985,8 +1062,63 @@ export function FolderManagement({ isAdmin = false }: FolderManagementProps) {
                       </div>
                     </div>
 
+                    {/* Range Configuration Section */}
+                    {selectedMetric && ['total_subscribers', 'total_views', 'total_uploads', 'views_last_30_days', 'views_per_subscriber'].includes(selectedMetric) && (
+                      <div className="mt-6 space-y-4 p-4 bg-background rounded-lg border">
+                        <h5 className="font-medium text-sm text-muted-foreground uppercase tracking-wide">Range Configuration</h5>
+                        
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id="use-custom-ranges" 
+                            checked={useCustomRanges}
+                            onCheckedChange={(checked) => setUseCustomRanges(checked as boolean)}
+                          />
+                          <Label htmlFor="use-custom-ranges" className="text-sm font-medium">
+                            Use custom ranges
+                          </Label>
+                        </div>
+
+                        {!useCustomRanges ? (
+                          <div className="space-y-2">
+                            <Label htmlFor="number-of-buckets">Number of ranges (2-10)</Label>
+                            <Select 
+                              value={numberOfBuckets.toString()} 
+                              onValueChange={(value) => setNumberOfBuckets(parseInt(value))}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {[2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
+                                  <SelectItem key={num} value={num.toString()}>
+                                    {num} ranges
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <Label htmlFor="custom-ranges">Custom breakpoints (comma-separated)</Label>
+                            <Textarea
+                              id="custom-ranges"
+                              placeholder="e.g., 1000, 10000, 100000, 1M, 10M (supports K, M, B suffixes)"
+                              value={customRanges}
+                              onChange={(e) => setCustomRanges(e.target.value)}
+                              rows={3}
+                              className="resize-none"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                              Enter breakpoint values separated by commas. Supports K (thousands), M (millions), B (billions).
+                              Example: "1K, 10K, 100K, 1M" creates ranges: &lt;1K, 1K-10K, 10K-100K, 100K-1M, 1M+
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {selectedMetric && (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-sm text-muted-foreground mt-4">
                         This will create a {chartType} chart showing the distribution of {availableMetrics.find(m => m.value === selectedMetric)?.label.toLowerCase()} across all channels in the "{selectedFolder}" folder.
                       </p>
                     )}

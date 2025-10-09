@@ -49,10 +49,11 @@ interface ChannelDataTableProps {
 export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
   const [data, setData] = useState<ChannelTableData[]>([])
   const [filteredData, setFilteredData] = useState<ChannelTableData[]>([])
+  const [timePeriod, setTimePeriod] = useState<string>("30")
   const [columns, setColumns] = useState<string[]>([
     "niche",
     "language", 
-    "views_last_30_days",
+    `views_last_30_days`, // Will be updated by useEffect when timePeriod changes
     // "videos_uploaded_last_30_days", // Not available from SocialBlade API
     "views_delta_30_days",
     "views_delta_7_days",
@@ -73,19 +74,56 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [editingCell, setEditingCell] = useState<{ row: number; col: string } | null>(null)
   // Removed takeoff filter functionality - was based on incorrect assumptions
-  const [timePeriod, setTimePeriod] = useState<string>("30")
   const [selectedNiche, setSelectedNiche] = useState<string>("all")
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null)
   const [showColumnSelection, setShowColumnSelection] = useState(false)
   const [selectedColumns, setSelectedColumns] = useState<Set<string>>(new Set(columns))
+  const [sortByTotalViews, setSortByTotalViews] = useState<boolean>(false)
 
   useEffect(() => {
     loadChannelData()
   }, [timePeriod])
 
   useEffect(() => {
+    // Update columns when time period changes
+    setColumns([
+      "niche",
+      "language", 
+      `views_last_${timePeriod}_days`, // Dynamic column based on time period
+      // "videos_uploaded_last_30_days", // Not available from SocialBlade API
+      "views_delta_30_days",
+      "views_delta_7_days",
+      "views_delta_3_days",
+      "views_per_subscriber",
+      "sub_niche",
+      "channel_type",
+      "channel_creation",
+      "thumbnail_style",
+      "video_style", 
+      "video_length",
+      "status",
+      "channel_name",
+      "notes",
+      "channel_id",
+    ])
+    // Update selected columns to include the new dynamic column
+    setSelectedColumns(prev => {
+      const newSet = new Set(prev)
+      // Remove old views_last_X_days columns
+      Array.from(prev).forEach(col => {
+        if (col.startsWith('views_last_') && col.endsWith('_days')) {
+          newSet.delete(col)
+        }
+      })
+      // Add new dynamic column
+      newSet.add(`views_last_${timePeriod}_days`)
+      return newSet
+    })
+  }, [timePeriod])
+
+  useEffect(() => {
     applyFilters()
-  }, [data, selectedNiche, sortConfig])
+  }, [data, selectedNiche, sortConfig, sortByTotalViews])
 
   const loadChannelData = async () => {
     setIsLoading(true)
@@ -113,8 +151,16 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
       filtered = filtered.filter(channel => channel.niche === selectedNiche)
     }
     
-    // Apply sorting
-    if (sortConfig) {
+    // Apply total views sorting if enabled
+    if (sortByTotalViews) {
+      filtered.sort((a, b) => {
+        const aViews = a.total_views || 0
+        const bViews = b.total_views || 0
+        return bViews - aViews // Descending order (highest views first)
+      })
+    }
+    // Apply manual sorting (takes precedence over total views sorting)
+    else if (sortConfig) {
       filtered.sort((a, b) => {
         const aValue = a[sortConfig.key]
         const bValue = b[sortConfig.key]
@@ -147,6 +193,16 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
     }
     
     setSortConfig({ key: columnKey, direction })
+    // Clear total views sorting when manual sorting is applied
+    setSortByTotalViews(false)
+  }
+
+  const handleTotalViewsSort = (checked: boolean) => {
+    setSortByTotalViews(checked)
+    // Clear manual sorting when total views sorting is enabled
+    if (checked) {
+      setSortConfig(null)
+    }
   }
 
   const getSortIcon = (columnKey: string) => {
@@ -248,11 +304,17 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
   }
 
   const formatColumnName = (name: string) => {
+    // Handle dynamic views_last_X_days column
+    if (name.startsWith('views_last_') && name.endsWith('_days')) {
+      const period = name.match(/views_last_(\d+)_days/)?.[1]
+      return `Views last ${period} days`
+    }
+    
     // Custom column name mappings to match the exact headers requested
     const customNames: Record<string, string> = {
       "niche": "Niche",
       "language": "Language", 
-      "views_last_30_days": "Views last 30 days",
+      "views_last_30_days": "Views last 30 days", // Fallback for old static name
       // "videos_uploaded_last_30_days": "Videos uploaded last 30 days", // Not available from SocialBlade
       "views_delta_30_days": "Views Δ% 30 days",
       "views_delta_7_days": "Views Δ% 7 days",
@@ -279,7 +341,7 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
     
     // Define read-only calculated fields
     const readOnlyFields = new Set([
-      "views_last_30_days",
+      `views_last_${timePeriod}_days`, // Dynamic field
       "views_delta_30_days", 
       "views_delta_7_days",
       "views_delta_3_days",
@@ -290,6 +352,11 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
       "total_views",
       "total_uploads"
     ])
+    
+    // Also add any other views_last_X_days fields as read-only
+    if (column.startsWith('views_last_') && column.endsWith('_days')) {
+      readOnlyFields.add(column)
+    }
     
     const isReadOnly = readOnlyFields.has(column)
 
@@ -358,8 +425,8 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
       )
     }
 
-    // Format numeric values (views)
-    if (column === "views_last_30_days" && typeof value === "number") {
+    // Format numeric values (views) - handle dynamic column names
+    if ((column.startsWith('views_last_') && column.endsWith('_days')) && typeof value === "number") {
       const formatViews = (num: number) => {
         if (num === 0) return ""
         if (num >= 1000000) return `${(num / 1000000).toFixed(1)}M`
@@ -490,6 +557,17 @@ export function ChannelDataTable({ isAdmin = false }: ChannelDataTableProps) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <Checkbox 
+              id="sort-by-total-views"
+              checked={sortByTotalViews}
+              onCheckedChange={handleTotalViewsSort}
+            />
+            <Label htmlFor="sort-by-total-views" className="text-sm font-medium">
+              Sort by total views (highest first)
+            </Label>
           </div>
         </div>
       </div>

@@ -11,6 +11,7 @@ import { PieChart as RechartsPieChart, Pie, Cell, ResponsiveContainer, BarChart,
 import { GrowthChart } from "./charts/growth-chart"
 import { NicheComparisonChart } from "./charts/niche-comparison-chart"
 import { DailyActivityChart } from "./charts/daily-activity-chart"
+import { LoadingSpinner, LoadingOverlay } from "@/components/ui/loading-spinner"
 import type { TimePeriod } from "@/lib/types"
 
 export function DataVisualizations() {
@@ -20,6 +21,8 @@ export function DataVisualizations() {
   const [channelData, setChannelData] = useState<any>(null)
   const [nicheData, setNicheData] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [isLoadingChannels, setIsLoadingChannels] = useState(true)
+  const [isLoadingNiche, setIsLoadingNiche] = useState(false)
   
   // Group analysis state
   const [groupAnalysisData, setGroupAnalysisData] = useState<any[]>([])
@@ -45,16 +48,21 @@ export function DataVisualizations() {
   }, [selectedPeriod])
 
   const loadChannels = async () => {
+    setIsLoadingChannels(true)
     try {
-      const response = await fetch("/api/channels")
+      // Fetch all channels - use a large limit to get all channels for visualizations
+      const response = await fetch("/api/channels?page=1&limit=1000")
       if (!response.ok) throw new Error("Failed to fetch channels")
-      const channelData = await response.json()
+      const data = await response.json()
+      const channelData = data.channels || []
       setChannels(channelData)
       if (channelData.length > 0 && !selectedChannelId) {
         setSelectedChannelId(channelData[0].channel_id)
       }
     } catch (error) {
       console.error("Failed to load channels:", error)
+    } finally {
+      setIsLoadingChannels(false)
     }
   }
 
@@ -83,6 +91,7 @@ export function DataVisualizations() {
   }
 
   const loadNicheData = async () => {
+    setIsLoadingNiche(true)
     try {
       const response = await fetch(`/api/analytics/niche-comparison?period=${selectedPeriod}`)
       if (!response.ok) throw new Error("Failed to fetch niche data")
@@ -90,6 +99,8 @@ export function DataVisualizations() {
       setNicheData(data)
     } catch (error) {
       console.error("Failed to load niche data:", error)
+    } finally {
+      setIsLoadingNiche(false)
     }
   }
 
@@ -217,55 +228,50 @@ export function DataVisualizations() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {nicheData.length > 0 && (
-              <>
-                <NicheComparisonChart data={nicheData} title="Views by Niche" metric="views" />
-                <NicheComparisonChart data={nicheData} title="Growth by Niche" metric="growth" />
-              </>
-            )}
-          </div>
+          <LoadingOverlay isLoading={isLoadingNiche} text="Loading niche data...">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {nicheData.length > 0 && (
+                <>
+                  <NicheComparisonChart data={nicheData} title="Views by Niche" metric="views" />
+                  <NicheComparisonChart data={nicheData} title="Growth by Niche" metric="growth" />
+                </>
+              )}
+            </div>
 
-          {nicheData.length === 0 && (
-            <Card>
-              <CardContent className="p-12 text-center">
-                <p className="text-muted-foreground">No data available for overview charts</p>
-              </CardContent>
-            </Card>
-          )}
+            {nicheData.length === 0 && !isLoadingNiche && (
+              <Card>
+                <CardContent className="p-12 text-center">
+                  <p className="text-muted-foreground">No data available for overview charts</p>
+                </CardContent>
+              </Card>
+            )}
+          </LoadingOverlay>
         </TabsContent>
 
         <TabsContent value="channel" className="space-y-6">
-          <div className="flex items-center gap-4 mb-6">
-            <Select value={selectedChannelId} onValueChange={setSelectedChannelId}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Select channel" />
-              </SelectTrigger>
-              <SelectContent>
-                {channels.map((channel) => (
-                  <SelectItem key={channel.channel_id} value={channel.channel_id}>
-                    {channel.display_name || channel.channel_name || "Unknown Channel"}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {isLoading && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {[...Array(2)].map((_, i) => (
-                <Card key={i} className="animate-pulse">
-                  <CardContent className="p-6">
-                    <div className="h-80 bg-muted rounded"></div>
-                  </CardContent>
-                </Card>
-              ))}
+          <LoadingOverlay isLoading={isLoadingChannels} text="Loading channels...">
+            <div className="flex items-center gap-4 mb-6">
+              <Select value={selectedChannelId} onValueChange={setSelectedChannelId}>
+                <SelectTrigger className="w-[200px]">
+                  <SelectValue placeholder="Select channel" />
+                </SelectTrigger>
+                <SelectContent>
+                  {channels
+                    .filter(channel => channel.channel_id && channel.channel_id.trim() !== '')
+                    .map((channel) => (
+                      <SelectItem key={channel.channel_id} value={channel.channel_id}>
+                        {channel.display_name || channel.channel_name || "Unknown Channel"}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
+          </LoadingOverlay>
 
-          {channelData && !isLoading && (
-            <div className="space-y-6">
-              <GrowthChart
+          <LoadingOverlay isLoading={isLoading} text="Loading channel data...">
+            {channelData && !isLoading && (
+              <div className="space-y-6">
+                <GrowthChart
                 data={channelData.stats}
                 title={`Growth Trends - ${selectedChannel?.display_name || selectedChannel?.channel_name || "Unknown Channel"}`}
               />
@@ -283,6 +289,7 @@ export function DataVisualizations() {
               </CardContent>
             </Card>
           )}
+          </LoadingOverlay>
         </TabsContent>
 
         <TabsContent value="group" className="space-y-6">
@@ -461,11 +468,13 @@ export function DataVisualizations() {
                 <SelectValue placeholder="Select channel" />
               </SelectTrigger>
               <SelectContent>
-                {channels.map((channel) => (
-                  <SelectItem key={channel.channel_id} value={channel.channel_id}>
-                    {channel.display_name || channel.channel_name || "Unknown Channel"}
-                  </SelectItem>
-                ))}
+                {channels
+                  .filter(channel => channel.channel_id && channel.channel_id.trim() !== '')
+                  .map((channel) => (
+                    <SelectItem key={channel.channel_id} value={channel.channel_id}>
+                      {channel.display_name || channel.channel_name || "Unknown Channel"}
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
           </div>

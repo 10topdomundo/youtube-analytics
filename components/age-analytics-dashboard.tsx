@@ -73,10 +73,12 @@ export function AgeAnalyticsDashboard() {
   const loadChannels = async () => {
     try {
       setIsLoading(true)
-      const response = await fetch("/api/channels")
+      // Fetch all channels - use a large limit to get all channels for analytics
+      const response = await fetch("/api/channels?page=1&limit=1000")
       if (!response.ok) throw new Error("Failed to fetch channels")
       
-      const channelData = await response.json()
+      const data = await response.json()
+      const channelData = data.channels || []
       
       // Process channels to add age classification
       const processedChannels = channelData.map((channel: any) => {

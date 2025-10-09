@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { LoadingSpinner, LoadingOverlay } from "@/components/ui/loading-spinner"
 import {
   Dialog,
   DialogContent,
@@ -49,7 +50,6 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
   const [resyncingChannels, setResyncingChannels] = useState<Set<string>>(new Set())
   const [openActionsDropdown, setOpenActionsDropdown] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [statsLoading, setStatsLoading] = useState(false)
   const [inputType, setInputType] = useState<'channel_id' | 'handle'>('channel_id')
   const [notesModal, setNotesModal] = useState<{ isOpen: boolean; channelId: string; channelName: string }>({
     isOpen: false,
@@ -59,6 +59,12 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
   const [channelInput, setChannelInput] = useState("")
   const [isSearching, setIsSearching] = useState(false)
   const [historyOption, setHistoryOption] = useState<'default' | 'extended' | 'archive'>('default')
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalChannels, setTotalChannels] = useState(0)
+  const ITEMS_PER_PAGE = 10
   const [formData, setFormData] = useState({
     channel_id: "",
     channel_name: "",
@@ -75,15 +81,11 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
     const loadInitialData = async () => {
       setIsLoading(true)
       try {
-        // Load channels first, then stats separately to show channels faster
+        // With pagination, channels already include metrics when loaded
+        // No need for separate loadChannelStatistics call
         await loadChannels()
-        setIsLoading(false)
-        
-        // Load stats in background
-        setStatsLoading(true)
-        await loadChannelStatistics()
       } finally {
-        setStatsLoading(false)
+        setIsLoading(false)
       }
     }
     loadInitialData()
@@ -102,47 +104,47 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
     return niches
   }
 
-  const loadChannels = async () => {
+  const loadChannels = async (page: number = currentPage) => {
     try {
-      const response = await fetch("/api/channels")
+      const response = await fetch(`/api/channels?page=${page}&limit=${ITEMS_PER_PAGE}&withMetrics=true`)
       if (!response.ok) {
         throw new Error("Failed to fetch channels")
       }
-      const channelData = await response.json()
-      setChannels(channelData)
+      const data = await response.json()
+      
+      setChannels(data.channels)
+      setTotalChannels(data.pagination.total)
+      setTotalPages(data.pagination.totalPages)
+      setCurrentPage(page)
+      
+      // Map statistics from the channels response
+      const statsMap: Record<string, any> = {}
+      data.channels.forEach((channel: any) => {
+        if (channel.statistics && channel.calculated) {
+          statsMap[channel.id] = {
+            total_subscribers: channel.statistics.total_subscribers || 0,
+            total_views: channel.statistics.total_views || 0,
+            views_last_30_days: channel.calculated.views_last_30_days || 0,
+          }
+        }
+      })
+      setChannelStats(statsMap)
       
       // Update available niches from loaded channels
-      const uniqueNiches = getUniqueNiches(channelData)
+      const uniqueNiches = getUniqueNiches(data.channels)
       setAvailableNiches(uniqueNiches as string[])
     } catch (error) {
       console.error("Failed to load channels:", error)
     }
   }
-
-  const loadChannelStatistics = async () => {
+  
+  const handlePageChange = async (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages) return
+    setIsLoading(true)
     try {
-      console.log("=== Loading Channel Statistics ===")
-      const response = await fetch("/api/channels/table-data")
-      if (!response.ok) {
-        throw new Error("Failed to fetch channel statistics")
-      }
-      const data = await response.json()
-      console.log("Table data response:", data)
-      console.log("Number of channels:", data.length)
-      
-      // Convert array to object keyed by channel ID for easy lookup
-      const statsMap: Record<string, any> = {}
-      data.forEach((channel: any) => {
-        console.log(`Mapping channel: ${channel.channel_name} (${channel.id})`)
-        console.log(`  - Subscribers: ${channel.total_subscribers}`)
-        console.log(`  - Views: ${channel.total_views}`)
-        statsMap[channel.id] = channel
-      })
-      console.log("Final stats map:", statsMap)
-      setChannelStats(statsMap)
-      console.log("=== End Loading Statistics ===")
-    } catch (error) {
-      console.error("Failed to load channel statistics:", error)
+      await loadChannels(newPage)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -206,7 +208,6 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
       }
 
       await loadChannels()
-      await loadChannelStatistics()
       resetForm()
       setIsAddDialogOpen(false)
       setEditingChannel(null)
@@ -351,7 +352,6 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
         }
 
         await loadChannels()
-        await loadChannelStatistics()
       } catch (error) {
         console.error("Failed to delete channel:", error)
       }
@@ -375,8 +375,8 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
       // Use the shared fetchSocialBladeData function with history parameter
       await fetchSocialBladeData(channelId, channel.channel_handle, history)
 
-      // Reload channel statistics after successful fetch
-      await loadChannelStatistics()
+      // Reload channel data after successful fetch
+      await loadChannels()
       console.log("Channel resynced successfully:", channel.channel_name)
       
       const historyLabels = {
@@ -944,28 +944,20 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-muted-foreground">Subscribers</p>
-                  {statsLoading ? (
-                    <div className="h-4 bg-muted rounded w-16 animate-pulse"></div>
-                  ) : (
-                    <p className="font-semibold">
-                      {formatNumber(channelStats[channel.id || '']?.total_subscribers || 0)}
-                    </p>
-                  )}
+                  <p className="font-semibold">
+                    {formatNumber(channelStats[channel.id || '']?.total_subscribers || 0)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Views</p>
-                  {statsLoading ? (
-                    <div className="h-4 bg-muted rounded w-16 animate-pulse"></div>
-                  ) : (
-                    <div className="space-y-1">
-                      <p className="font-semibold">
-                        {formatNumber(channelStats[channel.id || '']?.total_views || 0)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {formatNumber(channelStats[channel.id || '']?.views_last_30_days || 0)} (30d)
-                      </p>
-                    </div>
-                  )}
+                  <div className="space-y-1">
+                    <p className="font-semibold">
+                      {formatNumber(channelStats[channel.id || '']?.total_views || 0)}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatNumber(channelStats[channel.id || '']?.views_last_30_days || 0)} (30d)
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -979,6 +971,76 @@ export function ChannelManagement({ isAdmin = false }: ChannelManagementProps) {
       {!isLoading && filteredChannels.length === 0 && (
         <div className="text-center py-12">
           <p className="text-muted-foreground">No channels found matching your criteria.</p>
+        </div>
+      )}
+      
+      {/* Pagination Controls */}
+      {!isLoading && filteredChannels.length > 0 && (
+        <div className="flex items-center justify-between mt-6 px-4">
+          <div className="text-sm text-muted-foreground">
+            Showing page {currentPage} of {totalPages} ({totalChannels} total channels)
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(1)}
+              disabled={currentPage === 1}
+            >
+              First
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(currentPage - 1)}
+              disabled={currentPage === 1}
+            >
+              Previous
+            </Button>
+            <div className="flex items-center gap-1">
+              {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                // Show pages around current page
+                let pageNum
+                if (totalPages <= 5) {
+                  pageNum = i + 1
+                } else if (currentPage <= 3) {
+                  pageNum = i + 1
+                } else if (currentPage >= totalPages - 2) {
+                  pageNum = totalPages - 4 + i
+                } else {
+                  pageNum = currentPage - 2 + i
+                }
+                
+                return (
+                  <Button
+                    key={pageNum}
+                    variant={currentPage === pageNum ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => handlePageChange(pageNum)}
+                    className="w-8 h-8 p-0"
+                  >
+                    {pageNum}
+                  </Button>
+                )
+              })}
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(currentPage + 1)}
+              disabled={currentPage === totalPages}
+            >
+              Next
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => handlePageChange(totalPages)}
+              disabled={currentPage === totalPages}
+            >
+              Last
+            </Button>
+          </div>
         </div>
       )}
       </div>
